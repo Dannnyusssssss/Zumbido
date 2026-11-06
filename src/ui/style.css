@@ -1,0 +1,246 @@
+/* Estilos de la interfaz. Paneles oscuros opacos para garantizar contraste sobre la imagen 3D. */
+:root {
+  --bg: #0b0a06;
+  --panel: rgba(14, 12, 7, 0.94);
+  --text: #f3ecd6;
+  --muted: #d4c9a8;
+  --accent: #f0d77a;
+  --accent-text: #1a1608;
+  --border: #5a4f2e;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+.game-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  z-index: 0;
+}
+
+.ui-root {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  padding: 16px;
+  z-index: 2;
+}
+
+.ui-root.ui-blocking {
+  background: rgba(5, 4, 2, 0.55);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.panel {
+  pointer-events: auto;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 24px 28px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  line-height: 1.45;
+}
+
+.panel-center {
+  text-align: center;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 2.6rem;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+p {
+  margin: 0 0 10px;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+
+.small {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.warning,
+.controls {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.controls ul {
+  margin: 0;
+  padding-left: 20px;
+  columns: 2;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.btn {
+  font: inherit;
+  font-size: 1rem;
+  color: var(--text);
+  background: #2a2412;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #3a321a;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: #f7e39a;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.field-check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.field-range label,
+.field-select label {
+  flex: 0 0 190px;
+}
+
+.field-range input {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.field-value {
+  flex: 0 0 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+select {
+  font: inherit;
+  color: var(--text);
+  background: #2a2412;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.notice {
+  position: absolute;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100% - 32px));
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 14px;
+  text-align: center;
+}
+
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: rgba(255, 250, 230, 0.7);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.debug {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #e8ffe0;
+  font:
+    12px/1.4 ui-monospace,
+    Consolas,
+    monospace;
+  pointer-events: none;
+  white-space: pre;
+  z-index: 3;
+}
+
+.loading {
+  font-size: 1.2rem;
+}

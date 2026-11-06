@@ -1,0 +1,14 @@
+# Dependencias y salidas de build
+node_modules/
+dist/
+coverage/
+
+# Variables de entorno y claves (el juego no usa ninguna)
+.env*
+*.pem
+*.key
+
+# Archivos temporales del sistema
+.DS_Store
+Thumbs.db
+*.log

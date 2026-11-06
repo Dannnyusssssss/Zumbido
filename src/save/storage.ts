@@ -1,0 +1,125 @@
+/**
+ * Persistencia en localStorage con una sola clave (`zumbido:v1`).
+ * Tolera datos ausentes, corruptos o de otra versión: valida campo por campo
+ * y usa valores por defecto. Nunca lanza excepciones hacia el juego.
+ */
+import { SETTINGS_LIMITS } from '../data/balance';
+import { META } from '../data/meta';
+import { QUALITIES, type Quality } from '../data/quality';
+import { normalizeSeed } from '../core/params';
+
+export interface Settings {
+  muted: boolean;
+  reduceFlicker: boolean;
+  reduceMotion: boolean;
+  sensitivity: number;
+  invertY: boolean;
+  fov: number;
+  quality: Quality;
+  crosshair: boolean;
+}
+
+export interface SaveData {
+  version: 1;
+  settings: Settings;
+  lastSeed: string | null;
+}
+
+/** Subconjunto de la API Storage que usa el juego (permite inyectar un falso en los tests). */
+export interface StorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+/** Tamaño máximo aceptado del JSON guardado (protege de datos inflados). */
+const MAX_RAW_LENGTH = 16 * 1024;
+
+export function defaultSettings(prefersReducedMotion: boolean): Settings {
+  return {
+    muted: false,
+    reduceFlicker: prefersReducedMotion,
+    reduceMotion: prefersReducedMotion,
+    sensitivity: SETTINGS_LIMITS.sensitivity.default,
+    invertY: false,
+    fov: SETTINGS_LIMITS.fov.default,
+    quality: 'medium',
+    crosshair: true,
+  };
+}
+
+export function defaultSave(prefersReducedMotion: boolean): SaveData {
+  return { version: 1, settings: defaultSettings(prefersReducedMotion), lastSeed: null };
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function readBool(v: unknown, fallback: boolean): boolean {
+  return typeof v === 'boolean' ? v : fallback;
+}
+
+function readNumber(v: unknown, min: number, max: number, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : fallback;
+}
+
+function readQuality(v: unknown, fallback: Quality): Quality {
+  return typeof v === 'string' && (QUALITIES as readonly string[]).includes(v)
+    ? (v as Quality)
+    : fallback;
+}
+
+/** Valida unos ajustes desconocidos campo por campo. */
+export function sanitizeSettings(raw: unknown, prefersReducedMotion: boolean): Settings {
+  const d = defaultSettings(prefersReducedMotion);
+  if (!isRecord(raw)) return d;
+  const L = SETTINGS_LIMITS;
+  return {
+    muted: readBool(raw.muted, d.muted),
+    reduceFlicker: readBool(raw.reduceFlicker, d.reduceFlicker),
+    reduceMotion: readBool(raw.reduceMotion, d.reduceMotion),
+    sensitivity: readNumber(raw.sensitivity, L.sensitivity.min, L.sensitivity.max, d.sensitivity),
+    invertY: readBool(raw.invertY, d.invertY),
+    fov: readNumber(raw.fov, L.fov.min, L.fov.max, d.fov),
+    quality: readQuality(raw.quality, d.quality),
+    crosshair: readBool(raw.crosshair, d.crosshair),
+  };
+}
+
+/** Valida un guardado desconocido. Campos de versiones futuras se ignoran. */
+export function sanitizeSave(raw: unknown, prefersReducedMotion: boolean): SaveData {
+  if (!isRecord(raw)) return defaultSave(prefersReducedMotion);
+  return {
+    version: 1,
+    settings: sanitizeSettings(raw.settings, prefersReducedMotion),
+    lastSeed: typeof raw.lastSeed === 'string' ? normalizeSeed(raw.lastSeed) : null,
+  };
+}
+
+/** Lee el guardado. Con almacenamiento ausente, bloqueado o datos corruptos devuelve los valores por defecto. */
+export function loadSave(storage: StorageLike | null, prefersReducedMotion: boolean): SaveData {
+  if (storage === null) return defaultSave(prefersReducedMotion);
+  let text: string | null;
+  try {
+    text = storage.getItem(META.storageKey);
+  } catch {
+    return defaultSave(prefersReducedMotion);
+  }
+  if (text === null || text.length > MAX_RAW_LENGTH) return defaultSave(prefersReducedMotion);
+  try {
+    return sanitizeSave(JSON.parse(text) as unknown, prefersReducedMotion);
+  } catch {
+    return defaultSave(prefersReducedMotion);
+  }
+}
+
+/** Guarda. Devuelve false si no se pudo (sin almacenamiento, cuota llena, modo privado...). */
+export function writeSave(storage: StorageLike | null, data: SaveData): boolean {
+  if (storage === null) return false;
+  try {
+    storage.setItem(META.storageKey, JSON.stringify(data));
+    return true;
+  } catch {
+    return false;
+  }
+}
