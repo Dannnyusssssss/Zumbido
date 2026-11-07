@@ -244,3 +244,150 @@ select {
 .loading {
   font-size: 1.2rem;
 }
+
+/* HUD de juego. Fondos oscuros semitransparentes y texto claro para mantener el contraste. */
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hud .crosshair {
+  z-index: auto;
+}
+
+.stamina,
+.fuses,
+.prompt,
+.direction {
+  position: absolute;
+  background: rgba(10, 9, 5, 0.78);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 0.95rem;
+  text-shadow: 0 1px 2px #000;
+}
+
+.stamina {
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar {
+  width: 140px;
+  height: 10px;
+  background: #2a2412;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.stamina.low .bar-fill {
+  background: repeating-linear-gradient(45deg, #d0a24a 0 6px, #7a5a1a 6px 12px);
+}
+
+.fuses {
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+}
+
+.prompt {
+  left: 50%;
+  top: calc(50% + 40px);
+  transform: translateX(-50%);
+}
+
+.direction {
+  right: 16px;
+  top: 16px;
+}
+
+.subtitles {
+  position: absolute;
+  left: 50%;
+  bottom: 90px;
+  transform: translateX(-50%);
+  width: min(640px, calc(100% - 32px));
+  text-align: center;
+}
+
+.subtitles p {
+  display: table;
+  margin: 3px auto;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-size: 1rem;
+}
+
+/* Selección de partida. */
+.seed-box {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 14px 4px;
+  margin: 0 0 14px;
+}
+
+.seed-box legend {
+  color: var(--accent);
+  padding: 0 6px;
+}
+
+.seed-input {
+  font: inherit;
+  font-family: ui-monospace, Consolas, monospace;
+  text-transform: uppercase;
+  color: var(--text);
+  background: #1c180c;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  width: 16ch;
+}
+
+.seed-input[aria-invalid='true'] {
+  border-color: #ff9d7a;
+}
+
+.error-text {
+  color: #ffb39a;
+  min-height: 1.2em;
+}
+
+.level-list {
+  display: grid;
+  gap: 8px;
+}
+
+.level-list .btn {
+  text-align: left;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.stats p {
+  font-size: 1.1rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

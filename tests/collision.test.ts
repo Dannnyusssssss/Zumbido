@@ -17,11 +17,12 @@ class FakeGrid implements WallQuery {
   readonly v = new Set<string>();
   readonly h = new Set<string>();
   readonly cols = new Set<string>();
-  wallV(x: number, z: number): boolean {
-    return this.v.has(`${x},${z}`);
+  readonly shelvesV = new Set<string>();
+  wallV(x: number, z: number): number {
+    return this.shelvesV.has(`${x},${z}`) ? 2 : this.v.has(`${x},${z}`) ? 1 : 0;
   }
-  wallH(x: number, z: number): boolean {
-    return this.h.has(`${x},${z}`);
+  wallH(x: number, z: number): number {
+    return this.h.has(`${x},${z}`) ? 1 : 0;
   }
   column(x: number, z: number): boolean {
     return this.cols.has(`${x},${z}`);
@@ -79,6 +80,34 @@ describe('colisión círculo contra paredes', () => {
     moveCircle(g, pos, -2, -2, R);
     const inside = pos.x < C && pos.z < C;
     expect(inside).toBe(false);
+  });
+
+  it('un estante detiene al jugador según su fondo', () => {
+    const g = new FakeGrid();
+    g.shelvesV.add('1,0');
+    const pos = { x: 1.5, z: 1.5 };
+    moveCircle(g, pos, 5, 0, R);
+    expect(pos.x).toBeCloseTo(C - WORLD.shelfDepth / 2 - R, 5);
+  });
+
+  it('el pasillo entre dos estantes deja pasar al jugador', () => {
+    const g = new FakeGrid();
+    for (let z = -2; z <= 4; z++) {
+      g.shelvesV.add(`0,${z}`);
+      g.shelvesV.add(`1,${z}`);
+    }
+    const pos = { x: 1.5, z: 0.5 };
+    moveCircle(g, pos, 0, 6, R);
+    expect(pos.z).toBeCloseTo(6.5, 5);
+    expect(pos.x).toBeCloseTo(1.5, 5);
+  });
+
+  it('las cajas sueltas (la puerta) bloquean', () => {
+    const g = new FakeGrid();
+    const door = { minX: 1, maxX: 2, minZ: 2.9, maxZ: 3.1 };
+    const pos = { x: 1.5, z: 1.5 };
+    moveCircle(g, pos, 0, 5, R, [door]);
+    expect(pos.z).toBeCloseTo(2.9 - R, 5);
   });
 
   it('las columnas bloquean', () => {

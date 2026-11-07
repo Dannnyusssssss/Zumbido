@@ -71,9 +71,13 @@ export class WorldView {
       floor: new MeshLambertMaterial({ color: 0xffffff }),
       ceiling: new MeshLambertMaterial({ color: 0xffffff }),
       wall: new MeshLambertMaterial({ color: 0xffffff }),
+      shelf: new MeshLambertMaterial({ color: 0xffffff }),
       panel: new MeshBasicMaterial({ color: new Color(level.palette.panel) }),
     };
-    this.panelGeometry = new PlaneGeometry(1.2, 0.6).rotateX(Math.PI / 2);
+    this.panelGeometry = new PlaneGeometry(
+      level.lighting.panelWidth,
+      level.lighting.panelDepth,
+    ).rotateX(Math.PI / 2);
     this.lights = new LightPool(ctx.scene, level);
   }
 
@@ -81,16 +85,13 @@ export class WorldView {
   applyQuality(preset: QualityPreset): void {
     this.textures?.dispose();
     const texSeed = mix32(this.seedHash ^ hashSeed(this.level.name));
-    this.textures = createWorldTextures(
-      texSeed,
-      this.level.palette,
-      preset.textureSize,
-      preset.anisotropy,
-    );
+    this.textures = createWorldTextures(texSeed, this.level, preset.textureSize, preset.anisotropy);
     const m = this.materials;
     (m.floor as MeshLambertMaterial).map = this.textures.floor;
     (m.ceiling as MeshLambertMaterial).map = this.textures.ceiling;
     (m.wall as MeshLambertMaterial).map = this.textures.wall;
+    (m.shelf as MeshLambertMaterial).map = this.textures.shelf;
+    m.shelf.needsUpdate = true;
     m.floor.needsUpdate = true;
     m.ceiling.needsUpdate = true;
     m.wall.needsUpdate = true;
@@ -207,6 +208,7 @@ export class WorldView {
     this.materials.floor.dispose();
     this.materials.ceiling.dispose();
     this.materials.wall.dispose();
+    this.materials.shelf.dispose();
     this.materials.panel.dispose();
   }
 }

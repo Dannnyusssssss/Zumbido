@@ -2,7 +2,7 @@
  * Acceso a la cuadrícula del mundo a través de los chunks: coordenadas, caché de datos
  * generados y consultas de paredes y columnas en coordenadas globales de celda.
  */
-import { WORLD } from '../data/balance';
+import { EDGE, WORLD } from '../data/balance';
 import type { LevelDef } from '../data/levels';
 import { cellIndex, generateChunk, hIndex, N, vIndex, type ChunkData } from './worldgen';
 
@@ -88,10 +88,10 @@ export class ChunkStore {
 
 /** Consultas de colisión sobre la cuadrícula (implementada por WorldGrid y por los tests). */
 export interface WallQuery {
-  /** Pared vertical en la línea x global `lineX`, fila global `gz`. */
-  wallV(lineX: number, gz: number): boolean;
-  /** Pared horizontal en la línea z global `lineZ`, columna global `gx`. */
-  wallH(gx: number, lineZ: number): boolean;
+  /** Tipo de borde vertical (0 abierto, 1 pared, 2 estante) en la línea x global `lineX`, fila global `gz`. */
+  wallV(lineX: number, gz: number): number;
+  /** Tipo de borde horizontal en la línea z global `lineZ`, columna global `gx`. */
+  wallH(gx: number, lineZ: number): number;
   /** Columna en la celda global. */
   column(gx: number, gz: number): boolean;
 }
@@ -99,21 +99,21 @@ export interface WallQuery {
 export class WorldGrid implements WallQuery {
   constructor(readonly store: ChunkStore) {}
 
-  wallV(lineX: number, gz: number): boolean {
+  wallV(lineX: number, gz: number): number {
     const cx = chunkOfCell(lineX);
     const cz = chunkOfCell(gz);
     // Fuera del mundo acotado todo es pared.
-    if (!insideWorld(cx, cz)) return true;
+    if (!insideWorld(cx, cz)) return EDGE.wall;
     const chunk = this.store.get(cx, cz);
-    return chunk.vWalls[vIndex(lineX - cx * N, gz - cz * N)] === 1;
+    return chunk.vWalls[vIndex(lineX - cx * N, gz - cz * N)] ?? EDGE.wall;
   }
 
-  wallH(gx: number, lineZ: number): boolean {
+  wallH(gx: number, lineZ: number): number {
     const cx = chunkOfCell(gx);
     const cz = chunkOfCell(lineZ);
-    if (!insideWorld(cx, cz)) return true;
+    if (!insideWorld(cx, cz)) return EDGE.wall;
     const chunk = this.store.get(cx, cz);
-    return chunk.hWalls[hIndex(gx - cx * N, lineZ - cz * N)] === 1;
+    return chunk.hWalls[hIndex(gx - cx * N, lineZ - cz * N)] ?? EDGE.wall;
   }
 
   column(gx: number, gz: number): boolean {
@@ -123,4 +123,14 @@ export class WorldGrid implements WallQuery {
     const chunk = this.store.get(cx, cz);
     return chunk.columns[cellIndex(gx - cx * N, gz - cz * N)] === 1;
   }
+}
+
+/** Medio grosor de un borde según su tipo (pared fina o estante profundo). */
+export function edgeHalf(type: number): number {
+  return type === EDGE.shelf ? WORLD.shelfDepth / 2 : WORLD.wallThickness / 2;
+}
+
+/** Cuánto se alarga un borde por cada extremo para cerrar las esquinas (los estantes no se alargan). */
+export function edgeExtend(type: number): number {
+  return type === EDGE.shelf ? 0 : WORLD.wallThickness / 2;
 }

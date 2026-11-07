@@ -15,7 +15,7 @@ import {
   Mesh,
   type Material,
 } from 'three';
-import { WORLD } from '../data/balance';
+import { EDGE, WORLD } from '../data/balance';
 import type { LevelDef } from '../data/levels';
 import { flickerParams, isFlickering, type FlickerParams } from '../game/flicker';
 import { cellIndex, hIndex, N, vIndex, type ChunkData } from '../game/worldgen';
@@ -31,6 +31,7 @@ export interface ChunkMaterials {
   floor: Material;
   ceiling: Material;
   wall: Material;
+  shelf: Material;
   panel: Material;
 }
 
@@ -132,8 +133,8 @@ class QuadWriter {
     this.v += 4;
   }
 
-  /** Caja vertical (sin tapa: la cubre el techo) de x0..x1, z0..z1 y altura h. */
-  box(x0: number, x1: number, z0: number, z1: number, h: number): void {
+  /** Caja vertical de x0..x1, z0..z1 y altura h; con `top`, también la tapa (estantes más bajos que el techo). */
+  box(x0: number, x1: number, z0: number, z1: number, h: number, top = false): void {
     const v1 = 1;
     const W = WALL_TILE;
     // Orden antihorario visto desde fuera de cada cara; u crece hacia la derecha del observador.
@@ -143,6 +144,9 @@ class QuadWriter {
     // Cara -z (u a lo largo de -x) y cara +z (u a lo largo de +x).
     this.quad(x1, 0, z0, x0, 0, z0, x0, h, z0, x1, h, z0, 0, 0, -1, -x1 / W, 0, -x0 / W, v1);
     this.quad(x0, 0, z1, x1, 0, z1, x1, h, z1, x0, h, z1, 0, 0, 1, x0 / W, 0, x1 / W, v1);
+    if (top) {
+      this.quad(x0, h, z1, x1, h, z1, x1, h, z0, x0, h, z0, 0, 1, 0, 0, 0, 0.05, 0.05);
+    }
   }
 }
 
@@ -174,7 +178,10 @@ export function buildChunkView(
       if (chunk.hWalls[hIndex(x, z)] === 1 && drawsLine(z, chunk.cz)) walls++;
   let columns = 0;
   for (let i = 0; i < N * N; i++) if (chunk.columns[i] === 1) columns++;
-  const w = new QuadWriter(2 + (walls + columns) * 4);
+  let shelves = 0;
+  for (const v of chunk.vWalls) if (v === EDGE.shelf) shelves++;
+  for (const v of chunk.hWalls) if (v === EDGE.shelf) shelves++;
+  const w = new QuadWriter(2 + (walls + columns) * 4 + shelves * 5);
 
   // 2. Suelo y techo: un quad cada uno; una repetición de textura por celda.
   w.quad(0, 0, SIZE, SIZE, 0, SIZE, SIZE, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, N, N);
@@ -204,6 +211,24 @@ export function buildChunkView(
     }
   }
 
+  const wallsEnd = w.indexCount;
+
+  // 4. Estantes: cajas profundas sin alargar, más bajas que el techo y con tapa.
+  const SH = WORLD.shelfDepth / 2;
+  const shelfH = Math.min(WORLD.shelfHeight, H - 0.2);
+  for (let z = 0; z < N; z++) {
+    for (let x = 0; x <= N; x++) {
+      if (chunk.vWalls[vIndex(x, z)] !== EDGE.shelf) continue;
+      w.box(x * CS - SH, x * CS + SH, z * CS, (z + 1) * CS, shelfH, true);
+    }
+  }
+  for (let z = 0; z <= N; z++) {
+    for (let x = 0; x < N; x++) {
+      if (chunk.hWalls[hIndex(x, z)] !== EDGE.shelf) continue;
+      w.box(x * CS, (x + 1) * CS, z * CS - SH, z * CS + SH, shelfH, true);
+    }
+  }
+
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(w.pos, 3));
   geometry.setAttribute('normal', new BufferAttribute(w.nor, 3));
@@ -211,11 +236,17 @@ export function buildChunkView(
   geometry.setIndex(new BufferAttribute(w.idx, 1));
   geometry.addGroup(0, floorEnd, 0);
   geometry.addGroup(floorEnd, ceilingEnd - floorEnd, 1);
-  geometry.addGroup(ceilingEnd, w.indexCount - ceilingEnd, 2);
+  geometry.addGroup(ceilingEnd, wallsEnd - ceilingEnd, 2);
+  if (w.indexCount > wallsEnd) geometry.addGroup(wallsEnd, w.indexCount - wallsEnd, 3);
   geometry.computeBoundingSphere();
   geometry.computeBoundingBox();
 
-  const mesh = new Mesh(geometry, [materials.floor, materials.ceiling, materials.wall]);
+  const mesh = new Mesh(geometry, [
+    materials.floor,
+    materials.ceiling,
+    materials.wall,
+    materials.shelf,
+  ]);
   const ox = chunk.cx * SIZE;
   const oz = chunk.cz * SIZE;
   mesh.position.set(ox, 0, oz);

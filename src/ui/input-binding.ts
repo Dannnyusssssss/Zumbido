@@ -19,6 +19,13 @@ export interface InputHandlers {
   onCanvasClick(): void;
 }
 
+/** ¿El foco está en un campo donde se escribe texto? */
+export function isTextField(target: EventTarget | null): boolean {
+  if (target instanceof HTMLTextAreaElement) return true;
+  if (!(target instanceof HTMLInputElement)) return false;
+  return target.type === 'text' || target.type === 'search';
+}
+
 function isFormField(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLInputElement ||
@@ -63,6 +70,8 @@ export class InputBinding {
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     const playing = this.handlers.isPlaying();
     // En los menús, las teclas pertenecen a los controles (deslizadores, botones), salvo P y M.
+    // Al escribir en un campo de texto (la semilla) ninguna tecla es del juego, ni siquiera M o P.
+    if (isTextField(e.target)) return;
     if (!playing && isFormField(e.target) && e.code !== 'KeyM' && e.code !== 'KeyP') return;
     if (playing && PREVENT_DEFAULT_CODES.has(e.code)) e.preventDefault();
     if (e.ctrlKey || e.metaKey || e.altKey) return;

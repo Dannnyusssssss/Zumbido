@@ -4,12 +4,13 @@
  */
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace } from 'three';
 import { Rng } from '../core/rng';
-import type { Palette } from '../data/levels';
+import type { LevelDef, Palette } from '../data/levels';
 
 export interface WorldTextures {
   floor: CanvasTexture;
   wall: CanvasTexture;
   ceiling: CanvasTexture;
+  shelf: CanvasTexture;
   dispose(): void;
 }
 
@@ -138,31 +139,175 @@ function drawCeiling(ctx: CanvasRenderingContext2D, rng: Rng, size: number, p: P
   }
 }
 
-/** Crea las tres texturas del nivel. */
+/** Ruido de puntos para superficies de hormigón. */
+function speckle(
+  ctx: CanvasRenderingContext2D,
+  rng: Rng,
+  size: number,
+  density: number,
+  colors: readonly string[],
+): void {
+  const dots = size * size * density;
+  for (let i = 0; i < dots; i++) {
+    ctx.globalAlpha = rng.range(0.06, 0.25);
+    ctx.fillStyle = colors[rng.int(0, colors.length - 1)] as string;
+    const r = rng.chance(0.1) ? 2 : 1;
+    ctx.fillRect(Math.floor(rng.range(0, size)), Math.floor(rng.range(0, size)), r, r);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawConcreteFloor(
+  ctx: CanvasRenderingContext2D,
+  rng: Rng,
+  size: number,
+  p: Palette,
+  oil: boolean,
+): void {
+  ctx.fillStyle = p.floor;
+  ctx.fillRect(0, 0, size, size);
+  speckle(ctx, rng, size, 0.25, [p.floorFleck, '#8a8880', '#3f3d38']);
+  if (oil) stains(ctx, rng, size, 3, '#1c1b18', 0.35);
+  else stains(ctx, rng, size, 2, '#2c2a26', 0.12);
+  // Junta de dilatación en un borde de la losa (se repite cada celda).
+  ctx.fillStyle = 'rgba(20,20,18,0.35)';
+  ctx.fillRect(0, 0, size, Math.max(1, Math.round(size / 170)));
+}
+
+function drawConcreteWall(ctx: CanvasRenderingContext2D, rng: Rng, size: number, p: Palette): void {
+  ctx.fillStyle = p.wall;
+  ctx.fillRect(0, 0, size, size);
+  speckle(ctx, rng, size, 0.2, [p.wallPattern, '#a19f97', '#5f5d57']);
+  // Marcas horizontales del encofrado.
+  ctx.fillStyle = 'rgba(40,40,36,0.18)';
+  for (let i = 1; i < 4; i++)
+    ctx.fillRect(0, Math.round((i * size) / 4), size, Math.max(1, Math.round(size / 200)));
+  stains(ctx, rng, size, 2, '#3a3832', 0.15);
+  // Franja pintada abajo (señalización de cochera).
+  const band = Math.round(size * 0.08);
+  ctx.fillStyle = p.baseboard;
+  ctx.globalAlpha = 0.8;
+  ctx.fillRect(0, size - band, size, band);
+  ctx.globalAlpha = 1;
+}
+
+function drawSlab(ctx: CanvasRenderingContext2D, rng: Rng, size: number, p: Palette): void {
+  ctx.fillStyle = p.ceiling;
+  ctx.fillRect(0, 0, size, size);
+  speckle(ctx, rng, size, 0.15, [p.ceilingGrid, '#b0ada4']);
+  ctx.fillStyle = p.ceilingGrid;
+  ctx.globalAlpha = 0.5;
+  ctx.fillRect(0, 0, Math.max(2, Math.round(size / 100)), size);
+  ctx.globalAlpha = 1;
+  stains(ctx, rng, size, 1, '#5f5c55', 0.15);
+}
+
+function drawCorrugated(ctx: CanvasRenderingContext2D, rng: Rng, size: number, p: Palette): void {
+  // Chapa ondulada: bandas verticales con degradado claro-oscuro.
+  const ridges = 10;
+  const w = size / ridges;
+  for (let i = 0; i < ridges; i++) {
+    const g = ctx.createLinearGradient(i * w, 0, (i + 1) * w, 0);
+    g.addColorStop(0, p.wallPattern);
+    g.addColorStop(0.5, p.wall);
+    g.addColorStop(1, p.wallPattern);
+    ctx.fillStyle = g;
+    ctx.fillRect(i * w, 0, w + 1, size);
+  }
+  speckle(ctx, rng, size, 0.05, ['#2a2c30', '#7a7e86']);
+  stains(ctx, rng, size, 2, '#3a2a1a', 0.12);
+  const base = Math.round(size * 0.05);
+  ctx.fillStyle = p.baseboard;
+  ctx.fillRect(0, size - base, size, base);
+}
+
+function drawDarkCeiling(ctx: CanvasRenderingContext2D, rng: Rng, size: number, p: Palette): void {
+  ctx.fillStyle = p.ceiling;
+  ctx.fillRect(0, 0, size, size);
+  speckle(ctx, rng, size, 0.08, [p.ceilingGrid, '#4a4c50']);
+  // Vigas metálicas.
+  ctx.fillStyle = p.ceilingGrid;
+  const beam = Math.round(size * 0.07);
+  ctx.fillRect(0, Math.round(size * 0.46), size, beam);
+  ctx.fillRect(Math.round(size * 0.46), 0, Math.round(beam / 2), size);
+}
+
+/** Lateral de una estantería de 1,5 m: montantes, largueros y cajas de cartón. */
+function drawShelf(ctx: CanvasRenderingContext2D, rng: Rng, size: number, p: Palette): void {
+  ctx.fillStyle = '#16140f';
+  ctx.fillRect(0, 0, size, size);
+  const levels = 4;
+  const beamH = Math.max(3, Math.round(size * 0.025));
+  const post = Math.max(4, Math.round(size * 0.05));
+  for (let l = 0; l < levels; l++) {
+    const top = Math.round((l * size) / levels);
+    const bottom = Math.round(((l + 1) * size) / levels) - beamH;
+    // Cajas sobre cada balda.
+    let x = post + 2;
+    while (x < size - post - 8) {
+      const bw = Math.round(rng.range(size * 0.12, size * 0.3));
+      const bh = Math.round(rng.range((bottom - top) * 0.45, (bottom - top) * 0.9));
+      if (rng.chance(0.85)) {
+        ctx.fillStyle = p.shelfBox;
+        ctx.globalAlpha = rng.range(0.7, 1);
+        ctx.fillRect(x, bottom - bh, Math.min(bw, size - post - x - 2), bh);
+        ctx.fillStyle = 'rgba(60,40,20,0.35)';
+        ctx.fillRect(x, bottom - bh + Math.round(bh * 0.3), Math.min(bw, size - post - x - 2), 2);
+        ctx.globalAlpha = 1;
+      }
+      x += bw + Math.round(rng.range(2, size * 0.04));
+    }
+    // Larguero.
+    ctx.fillStyle = p.shelfFrame;
+    ctx.fillRect(0, bottom, size, beamH);
+  }
+  // Montantes en los dos extremos (se repiten cada 1,5 m).
+  ctx.fillStyle = p.shelfFrame;
+  ctx.fillRect(0, 0, post, size);
+  ctx.fillRect(size - post, 0, post, size);
+}
+
+/** Crea las texturas del nivel según su estilo. */
 export function createWorldTextures(
   seed: number,
-  palette: Palette,
+  level: LevelDef,
   size: number,
   anisotropy: number,
 ): WorldTextures {
   const rng = new Rng(seed);
+  const p = level.palette;
   const [fc, fctx] = canvas(size);
-  drawCarpet(fctx, rng, size, palette);
   const [wc, wctx] = canvas(size);
-  drawWallpaper(wctx, rng, size, palette);
   const [cc, cctx] = canvas(size);
-  drawCeiling(cctx, rng, size, palette);
+  const [sc, sctx] = canvas(size);
+  if (level.style === 'office') {
+    drawCarpet(fctx, rng, size, p);
+    drawWallpaper(wctx, rng, size, p);
+    drawCeiling(cctx, rng, size, p);
+  } else if (level.style === 'garage') {
+    drawConcreteFloor(fctx, rng, size, p, true);
+    drawConcreteWall(wctx, rng, size, p);
+    drawSlab(cctx, rng, size, p);
+  } else {
+    drawConcreteFloor(fctx, rng, size, p, false);
+    drawCorrugated(wctx, rng, size, p);
+    drawDarkCeiling(cctx, rng, size, p);
+  }
+  drawShelf(sctx, rng, size, p);
   const floor = toTexture(fc, anisotropy);
   const wall = toTexture(wc, anisotropy);
   const ceiling = toTexture(cc, anisotropy);
+  const shelf = toTexture(sc, anisotropy);
   return {
     floor,
     wall,
     ceiling,
+    shelf,
     dispose() {
       floor.dispose();
       wall.dispose();
       ceiling.dispose();
+      shelf.dispose();
     },
   };
 }

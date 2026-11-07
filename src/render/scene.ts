@@ -54,10 +54,19 @@ export function resizeRenderer(ctx: RenderContext, preset: QualityPreset): void 
   ctx.camera.updateProjectionMatrix();
 }
 
-/** Aplica los parámetros de niebla de la calidad. */
-export function applyFog(ctx: RenderContext, preset: QualityPreset): void {
-  ctx.fog.near = preset.fogNear;
-  ctx.fog.far = preset.fogFar;
-  ctx.camera.far = preset.fogFar + 10;
+/** Aplica la niebla de la calidad, escalada por el nivel (el Almacén es más cerrado). */
+export function applyFog(ctx: RenderContext, preset: QualityPreset, scale = 1): void {
+  ctx.fog.near = preset.fogNear * scale;
+  ctx.fog.far = preset.fogFar * scale;
+  ctx.camera.far = ctx.fog.far + 10;
   ctx.camera.updateProjectionMatrix();
+}
+
+/** Colores de fondo, niebla y luz ambiente del nivel. */
+export function applyLevelLook(ctx: RenderContext, level: LevelDef): void {
+  const fogColor = new Color(level.palette.fog);
+  ctx.scene.background = fogColor;
+  ctx.fog.color.copy(fogColor);
+  ctx.ambient.color.set(level.palette.ambient);
+  ctx.ambient.intensity = level.lighting.ambientIntensity;
 }

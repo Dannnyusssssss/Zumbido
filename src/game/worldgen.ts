@@ -8,7 +8,7 @@
  * Los bordes del chunk (x = 0, x = N, z = 0, z = N) se guardan en los dos chunks vecinos
  * y coinciden porque se calculan con el hash del borde compartido.
  */
-import { WORLD } from '../data/balance';
+import { EDGE, WORLD } from '../data/balance';
 import type { GenParams, LevelDef } from '../data/levels';
 import { hash3, hashToUnit, Rng } from '../core/rng';
 
@@ -149,10 +149,10 @@ function edgeIsWall(chunk: ChunkData, edge: number): boolean {
   if (edge < V_EDGES) {
     const z = Math.floor(edge / (N - 1));
     const x = (edge % (N - 1)) + 1;
-    return chunk.vWalls[vIndex(x, z)] === 1;
+    return chunk.vWalls[vIndex(x, z)] > 0;
   }
   const e = edge - V_EDGES;
-  return chunk.hWalls[hIndex(e % N, Math.floor(e / N) + 1)] === 1;
+  return chunk.hWalls[hIndex(e % N, Math.floor(e / N) + 1)] > 0;
 }
 
 function openEdge(chunk: ChunkData, edge: number): void {
@@ -216,10 +216,10 @@ function reduceDeadEnds(chunk: ChunkData, rng: Rng, g: GenParams): void {
     if (cellDegree(chunk, x, z) > 1) continue;
     // Paredes internas que rodean la celda: se abre una al azar.
     const options: Array<[number, number]> = [];
-    if (x > 0 && chunk.vWalls[vIndex(x, z)] === 1) options.push([x - 1, z]);
-    if (x < N - 1 && chunk.vWalls[vIndex(x + 1, z)] === 1) options.push([x + 1, z]);
-    if (z > 0 && chunk.hWalls[hIndex(x, z)] === 1) options.push([x, z - 1]);
-    if (z < N - 1 && chunk.hWalls[hIndex(x, z + 1)] === 1) options.push([x, z + 1]);
+    if (x > 0 && chunk.vWalls[vIndex(x, z)] > 0) options.push([x - 1, z]);
+    if (x < N - 1 && chunk.vWalls[vIndex(x + 1, z)] > 0) options.push([x + 1, z]);
+    if (z > 0 && chunk.hWalls[hIndex(x, z)] > 0) options.push([x, z - 1]);
+    if (z < N - 1 && chunk.hWalls[hIndex(x, z + 1)] > 0) options.push([x, z + 1]);
     if (options.length === 0) continue;
     const [nx, nz] = options[rng.int(0, options.length - 1)] as [number, number];
     const neighborWasDeadEnd = cellDegree(chunk, nx, nz) <= 1;
@@ -227,6 +227,39 @@ function reduceDeadEnds(chunk: ChunkData, rng: Rng, g: GenParams): void {
     else chunk.hWalls[hIndex(x, Math.max(z, nz))] = 0;
     deadEnds -= 1;
     if (neighborWasDeadEnd && cellDegree(chunk, nx, nz) > 1) deadEnds -= 1;
+  }
+}
+
+/**
+ * Estantes: filas dentro de las salas grandes (pasillos estrechos, con la primera y la última fila
+ * libres como pasillos transversales) y una parte de las paredes interiores convertidas en estantes.
+ * Los bordes del chunk nunca son estantes, así los dos vecinos siguen coincidiendo.
+ */
+function placeShelves(chunk: ChunkData, rng: Rng, g: GenParams): void {
+  if (g.shelfRows) {
+    for (const room of chunk.rooms) {
+      if (!room.large) continue;
+      for (let x = room.x + 1; x < room.x + room.w; x++) {
+        for (let z = room.z + 1; z < room.z + room.h - 1; z++) {
+          if (chunk.vWalls[vIndex(x, z)] === EDGE.open) chunk.vWalls[vIndex(x, z)] = EDGE.shelf;
+        }
+      }
+    }
+  }
+  if (g.shelfRatio > 0) {
+    // Una pared que pasa a estante sigue bloqueando: la conectividad no cambia.
+    for (let z = 0; z < N; z++) {
+      for (let x = 1; x < N; x++) {
+        const i = vIndex(x, z);
+        if (chunk.vWalls[i] === EDGE.wall && rng.chance(g.shelfRatio)) chunk.vWalls[i] = EDGE.shelf;
+      }
+    }
+    for (let z = 1; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const i = hIndex(x, z);
+        if (chunk.hWalls[i] === EDGE.wall && rng.chance(g.shelfRatio)) chunk.hWalls[i] = EDGE.shelf;
+      }
+    }
   }
 }
 
@@ -280,7 +313,7 @@ export function generateChunk(seed: number, level: LevelDef, cx: number, cz: num
   const sets = new DisjointSet(N * N);
   for (const room of rooms) {
     carveRoom(chunk, room, sets);
-    if (room.large) placeColumns(chunk, room, g.columnSpacing);
+    if (room.large && g.columnSpacing > 0) placeColumns(chunk, room, g.columnSpacing);
   }
 
   // 3. Árbol aleatorio (Kruskal): conecta todas las celdas y, con ellas, todas las aberturas.
@@ -300,6 +333,9 @@ export function generateChunk(seed: number, level: LevelDef, cx: number, cz: num
 
   // 5. Pocos callejones sin salida.
   reduceDeadEnds(chunk, rng, g);
+
+  // 5b. Estantes (solo en los niveles que los usan; no cambia la conectividad).
+  if (g.shelfRows || g.shelfRatio > 0) placeShelves(chunk, rng, g);
 
   // 6. Paneles de luz del techo.
   placePanels(chunk, seed, level);

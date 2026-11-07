@@ -4,7 +4,7 @@
  */
 import { LOOK, PLAYER } from '../data/balance';
 import { clamp } from '../core/math';
-import { moveCircle } from './collision';
+import { moveCircle, type Box } from './collision';
 import type { WallQuery } from './grid';
 
 export interface MoveIntent {
@@ -51,7 +51,7 @@ export class Player {
   }
 
   /** Un paso fijo de movimiento con colisión. */
-  step(dt: number, intent: MoveIntent, grid: WallQuery): void {
+  step(dt: number, intent: MoveIntent, grid: WallQuery, boxes?: readonly Box[]): void {
     this.prevX = this.x;
     this.prevZ = this.z;
     this.prevDistance = this.distance;
@@ -73,7 +73,7 @@ export class Player {
 
     this.pos.x = this.x;
     this.pos.z = this.z;
-    moveCircle(grid, this.pos, this.vx * dt, this.vz * dt, PLAYER.radius);
+    moveCircle(grid, this.pos, this.vx * dt, this.vz * dt, PLAYER.radius, boxes);
     const movedX = this.pos.x - this.x;
     const movedZ = this.pos.z - this.z;
     // La velocidad real tras chocar evita acumular empuje contra la pared.

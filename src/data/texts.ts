@@ -2,7 +2,7 @@
 export const TEXTS = {
   start: {
     subtitle: 'Pasillos que no terminan. Luces que zumban. Algo escucha.',
-    play: 'Haz clic para jugar',
+    play: 'Jugar',
     warningTitle: 'Aviso de contenido',
     warning:
       'Oscuridad, tensión, espacios cerrados, luces parpadeantes suaves y sonido envolvente. Sin sangre ni imágenes explícitas.',
@@ -13,6 +13,8 @@ export const TEXTS = {
       'Ratón o flechas: mirar',
       'Shift: correr',
       'C: agacharse',
+      'E: interactuar',
+      'Q: marcar con tiza',
       'Esc o P: pausa',
       'M: silenciar',
     ],
@@ -23,6 +25,10 @@ export const TEXTS = {
     resume: 'Haz clic para continuar',
     settings: 'Ajustes',
     seed: 'Semilla',
+    level: 'Nivel',
+    time: 'Tiempo',
+    retry: 'Reintentar nivel',
+    menu: 'Menú principal',
   },
   settings: {
     title: 'Ajustes',
@@ -35,6 +41,8 @@ export const TEXTS = {
     fov: 'Campo de visión',
     quality: 'Calidad',
     crosshair: 'Punto central',
+    subtitles: 'Subtítulos de sonido',
+    directionAid: 'Ayuda de dirección a la salida',
     qualityLow: 'Baja',
     qualityMedium: 'Media',
     qualityHigh: 'Alta',
@@ -45,6 +53,79 @@ export const TEXTS = {
       'No se pudo capturar el ratón. Puedes girar con las flechas o hacer clic de nuevo.',
     muted: 'Sonido silenciado',
     unmuted: 'Sonido activado',
+  },
+  select: {
+    title: 'Elegir partida',
+    seedTitle: 'Semilla',
+    seedRandom: 'Aleatoria',
+    seedDaily: 'Del día',
+    seedTyped: 'Escribir semilla',
+    seedLabel: 'Semilla escrita',
+    seedHint: 'Letras A–Z y números, de 1 a 16 caracteres.',
+    seedInvalid: 'Semilla no válida: usa solo letras A–Z y números (de 1 a 16).',
+    modeTitle: 'Empezar',
+    fullRun: 'Partida completa (niveles 1 a 3)',
+    singleTitle: 'Nivel suelto',
+    locked: 'bloqueado',
+    best: 'Mejor',
+    bestRun: 'Mejor partida completa',
+    noTime: 'sin marca',
+    back: 'Volver',
+  },
+  hud: {
+    stamina: 'Resistencia',
+    fuses: 'Fusibles',
+    promptFuse: 'E: recoger fusible',
+    promptExit: 'E: salir',
+    promptExitLocked: 'E: salida (faltan fusibles)',
+    directionAid: 'Salida',
+    exhausted: 'agotado',
+  },
+  messages: {
+    levelIntro: (id: number, name: string): string => `Nivel ${id}: ${name}`,
+    objectiveExit: 'Encuentra la salida.',
+    objectiveFuses: (n: number): string => `Reúne ${n} fusibles y encuentra la salida.`,
+    exitLocked: (n: number): string =>
+      n === 1
+        ? 'La salida no funciona: falta 1 fusible.'
+        : `La salida no funciona: faltan ${n} fusibles.`,
+    fusePicked: (n: number): string =>
+      n === 0
+        ? 'Fusible recogido.'
+        : n === 1
+          ? 'Fusible recogido. Falta 1.'
+          : `Fusible recogido. Faltan ${n}.`,
+    exitActivated: 'Todos los fusibles: la salida está activa.',
+  },
+  subtitles: {
+    directions: [
+      'delante',
+      'delante a la izquierda',
+      'a la izquierda',
+      'detrás a la izquierda',
+      'detrás',
+      'detrás a la derecha',
+      'a la derecha',
+      'delante a la derecha',
+    ],
+    exitHum: (dir: string): string => `[Un zumbido distinto, ${dir}]`,
+    chalk: '[Tiza raspando]',
+    pickup: '[Clic metálico]',
+    locked: '[Zumbido seco de la puerta]',
+    activated: '[La salida zumba más fuerte]',
+  },
+  results: {
+    title: 'Nivel completado',
+    time: 'Tiempo',
+    best: 'Mejor',
+    newBest: 'Nuevo récord',
+    continueTo: (id: number, name: string): string => `Continuar: nivel ${id}, ${name}`,
+    retry: 'Reintentar',
+    menu: 'Menú principal',
+    victoryTitle: 'Has salido',
+    victoryText: 'Has recorrido los tres niveles sin quedarte atrapado.',
+    total: 'Tiempo total',
+    playAgain: 'Jugar otra vez',
   },
   errors: {
     noWebGL:

@@ -41,6 +41,9 @@ export const WORLD = {
   cellSize: 3,
   chunkCells: 16,
   wallThickness: 0.15,
+  /** Fondo de un estante (tipo de pared 2): deja pasillos de unos 2,1 m. */
+  shelfDepth: 0.9,
+  shelfHeight: 3,
   columnSize: 0.6,
   /** Límite del mundo en chunks desde el origen (más allá, pared). */
   maxChunk: 1000,
@@ -72,4 +75,63 @@ export const FLICKER = {
   maxFlashesPerSecond: 3,
   /** Tope de proporción de paneles que parpadean en un nivel. */
   maxRatio: 0.1,
+} as const;
+
+/** Tipos de borde de celda en la cuadrícula. */
+export const EDGE = {
+  open: 0,
+  wall: 1,
+  shelf: 2,
+} as const;
+
+/** Resistencia al correr. */
+export const STAMINA = {
+  max: 100,
+  drainPerSecond: 20,
+  regenPerSecond: 14,
+  /** Segundos sin correr antes de empezar a recuperarse. */
+  regenDelay: 0.8,
+  /** Tras agotarse, no se puede volver a correr hasta este valor. */
+  recoverThreshold: 30,
+} as const;
+
+/** Interacción con E. */
+export const INTERACT = {
+  range: 1.6,
+  /** Coseno del ángulo máximo entre la mirada y el objeto (unos 70°). */
+  minFacing: 0.34,
+} as const;
+
+/** Tiza (Q). */
+export const CHALK = {
+  poolSize: 48,
+  wallReach: 2.5,
+  floorDistance: 1.2,
+  wallMarkHeight: 1.3,
+  markSize: 0.6,
+} as const;
+
+/** Salida y objetos colocados. */
+export const OBJECTS = {
+  doorWidth: 1.0,
+  doorDepth: 0.2,
+  doorHeight: 2.1,
+  fuseSize: 0.3,
+  /** Pedestal sobre el que descansa el fusible (se ve al acercarse, no queda bajo la cámara). */
+  pedestalSize: 0.35,
+  pedestalHeight: 0.9,
+  /** Distancia (m) a la que se muestra el subtítulo del zumbido de la salida. */
+  exitCueRange: 25,
+  /** Segundos entre repeticiones del subtítulo del zumbido. */
+  exitCueInterval: 4,
+} as const;
+
+/** Volúmenes de las fuentes de sonido (antes del limitador). Moderados: sin sustos de volumen. */
+export const SOUND = {
+  humBus: 0.55,
+  exitHumIdle: 0.12,
+  exitHumActive: 0.22,
+  exitRefDistance: 2,
+  exitMaxDistance: 45,
+  sfx: 0.35,
 } as const;

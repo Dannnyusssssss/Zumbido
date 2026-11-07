@@ -8,7 +8,14 @@ import { TEXTS } from '../data/texts';
 import type { Settings } from '../save/storage';
 import { el } from './dom';
 
-type BoolKey = 'muted' | 'reduceFlicker' | 'reduceMotion' | 'invertY' | 'crosshair';
+type BoolKey =
+  | 'muted'
+  | 'reduceFlicker'
+  | 'reduceMotion'
+  | 'invertY'
+  | 'crosshair'
+  | 'subtitles'
+  | 'directionAid';
 
 let idCounter = 0;
 const nextId = (prefix: string): string => `${prefix}-${++idCounter}`;
@@ -109,6 +116,8 @@ export class SettingsControls {
       this.checkbox('reduceFlicker', t.reduceFlicker),
       this.checkbox('reduceMotion', t.reduceMotion),
       this.checkbox('crosshair', t.crosshair),
+      this.checkbox('subtitles', t.subtitles),
+      this.checkbox('directionAid', t.directionAid),
       this.checkbox('invertY', t.invertY),
       this.slider('sensitivity', t.sensitivity, 0.05, (v) => v.toFixed(2)),
       this.slider('fov', t.fov, 1, (v) => `${Math.round(v)}°`),

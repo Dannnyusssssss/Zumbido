@@ -7,6 +7,7 @@ import { SETTINGS_LIMITS } from '../data/balance';
 import { META } from '../data/meta';
 import { QUALITIES, type Quality } from '../data/quality';
 import { normalizeSeed } from '../core/params';
+import { defaultProgress, sanitizeProgress, type Progress } from '../game/progress';
 
 export interface Settings {
   muted: boolean;
@@ -17,12 +18,17 @@ export interface Settings {
   fov: number;
   quality: Quality;
   crosshair: boolean;
+  /** Subtítulos de sonido (texto para las señales sonoras importantes). */
+  subtitles: boolean;
+  /** Ayuda opcional de dirección aproximada a la salida. */
+  directionAid: boolean;
 }
 
 export interface SaveData {
   version: 1;
   settings: Settings;
   lastSeed: string | null;
+  progress: Progress;
 }
 
 /** Subconjunto de la API Storage que usa el juego (permite inyectar un falso en los tests). */
@@ -44,11 +50,18 @@ export function defaultSettings(prefersReducedMotion: boolean): Settings {
     fov: SETTINGS_LIMITS.fov.default,
     quality: 'medium',
     crosshair: true,
+    subtitles: true,
+    directionAid: false,
   };
 }
 
 export function defaultSave(prefersReducedMotion: boolean): SaveData {
-  return { version: 1, settings: defaultSettings(prefersReducedMotion), lastSeed: null };
+  return {
+    version: 1,
+    settings: defaultSettings(prefersReducedMotion),
+    lastSeed: null,
+    progress: defaultProgress(),
+  };
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -83,6 +96,8 @@ export function sanitizeSettings(raw: unknown, prefersReducedMotion: boolean): S
     fov: readNumber(raw.fov, L.fov.min, L.fov.max, d.fov),
     quality: readQuality(raw.quality, d.quality),
     crosshair: readBool(raw.crosshair, d.crosshair),
+    subtitles: readBool(raw.subtitles, d.subtitles),
+    directionAid: readBool(raw.directionAid, d.directionAid),
   };
 }
 
@@ -93,6 +108,8 @@ export function sanitizeSave(raw: unknown, prefersReducedMotion: boolean): SaveD
     version: 1,
     settings: sanitizeSettings(raw.settings, prefersReducedMotion),
     lastSeed: typeof raw.lastSeed === 'string' ? normalizeSeed(raw.lastSeed) : null,
+    // Los guardados del Hito 1 no tienen progreso: se usan los valores por defecto.
+    progress: sanitizeProgress(raw.progress),
   };
 }
 

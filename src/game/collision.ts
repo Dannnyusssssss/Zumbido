@@ -1,21 +1,29 @@
 /**
- * Colisión de un círculo (el jugador) contra las paredes finas y las columnas de la cuadrícula.
- * Cada pared es una caja delgada alargada un poco por los extremos para cerrar las esquinas.
- * Se empuja el círculo fuera de cada caja; así desliza por las paredes en vez de frenarse.
+ * Colisión de un círculo (el jugador) contra los bordes de la cuadrícula (paredes finas y estantes),
+ * las columnas y cajas sueltas (la puerta de salida). Las paredes se alargan un poco por los extremos
+ * para cerrar las esquinas. Se empuja el círculo fuera de cada caja; así desliza por las paredes.
  */
 import { WORLD } from '../data/balance';
-import type { WallQuery } from './grid';
+import { edgeExtend, edgeHalf, type WallQuery } from './grid';
 
 export interface Vec2 {
   x: number;
   z: number;
 }
 
+/** Caja alineada con los ejes en el plano (metros). */
+export interface Box {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
 const CELL = WORLD.cellSize;
-const HALF_WALL = WORLD.wallThickness / 2;
 const HALF_COLUMN = WORLD.columnSize / 2;
 const MAX_SUBSTEP = 0.1;
 const MAX_ITERATIONS = 4;
+const NO_BOXES: readonly Box[] = [];
 
 /** Empuja `pos` fuera de la caja si el círculo la toca. Devuelve true si hubo empuje. */
 function pushOutOfBox(
@@ -52,46 +60,39 @@ function pushOutOfBox(
   return true;
 }
 
-/** Resuelve las superposiciones del círculo con la cuadrícula cercana. */
-export function resolveCircle(grid: WallQuery, pos: Vec2, radius: number): void {
+/** Resuelve las superposiciones del círculo con la cuadrícula cercana y las cajas sueltas. */
+export function resolveCircle(
+  grid: WallQuery,
+  pos: Vec2,
+  radius: number,
+  boxes: readonly Box[] = NO_BOXES,
+): void {
   for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
     let pushed = false;
     const gx = Math.floor(pos.x / CELL);
     const gz = Math.floor(pos.z / CELL);
-    // Paredes verticales: líneas gx y gx+1, filas vecinas (sus extremos alargados también cuentan).
+    // Bordes verticales: líneas gx y gx+1, filas vecinas (sus extremos alargados también cuentan).
     for (let lx = gx; lx <= gx + 1; lx++) {
       for (let rz = gz - 1; rz <= gz + 1; rz++) {
-        if (!grid.wallV(lx, rz)) continue;
+        const type = grid.wallV(lx, rz);
+        if (type === 0) continue;
         const x = lx * CELL;
-        if (
-          pushOutOfBox(
-            pos,
-            radius,
-            x - HALF_WALL,
-            x + HALF_WALL,
-            rz * CELL - HALF_WALL,
-            (rz + 1) * CELL + HALF_WALL,
-          )
-        ) {
+        const h = edgeHalf(type);
+        const e = edgeExtend(type);
+        if (pushOutOfBox(pos, radius, x - h, x + h, rz * CELL - e, (rz + 1) * CELL + e)) {
           pushed = true;
         }
       }
     }
-    // Paredes horizontales: líneas gz y gz+1, columnas vecinas.
+    // Bordes horizontales: líneas gz y gz+1, columnas vecinas.
     for (let lz = gz; lz <= gz + 1; lz++) {
       for (let cxCell = gx - 1; cxCell <= gx + 1; cxCell++) {
-        if (!grid.wallH(cxCell, lz)) continue;
+        const type = grid.wallH(cxCell, lz);
+        if (type === 0) continue;
         const z = lz * CELL;
-        if (
-          pushOutOfBox(
-            pos,
-            radius,
-            cxCell * CELL - HALF_WALL,
-            (cxCell + 1) * CELL + HALF_WALL,
-            z - HALF_WALL,
-            z + HALF_WALL,
-          )
-        ) {
+        const h = edgeHalf(type);
+        const e = edgeExtend(type);
+        if (pushOutOfBox(pos, radius, cxCell * CELL - e, (cxCell + 1) * CELL + e, z - h, z + h)) {
           pushed = true;
         }
       }
@@ -113,6 +114,9 @@ export function resolveCircle(grid: WallQuery, pos: Vec2, radius: number): void 
         pushed = true;
       }
     }
+    for (const b of boxes) {
+      if (pushOutOfBox(pos, radius, b.minX, b.maxX, b.minZ, b.maxZ)) pushed = true;
+    }
     if (!pushed) return;
   }
 }
@@ -124,6 +128,7 @@ export function moveCircle(
   dx: number,
   dz: number,
   radius: number,
+  boxes: readonly Box[] = NO_BOXES,
 ): void {
   const dist = Math.hypot(dx, dz);
   const steps = Math.max(1, Math.ceil(dist / MAX_SUBSTEP));
@@ -132,6 +137,6 @@ export function moveCircle(
   for (let i = 0; i < steps; i++) {
     pos.x += sx;
     pos.z += sz;
-    resolveCircle(grid, pos, radius);
+    resolveCircle(grid, pos, radius, boxes);
   }
 }
