@@ -13,11 +13,12 @@ export const TEXTS = {
       'Ratón o flechas: mirar',
       'Shift: correr',
       'C: agacharse',
-      'E: interactuar',
+      'E: interactuar y esconderse (taquillas y armarios)',
       'Q: marcar con tiza',
       'Esc o P: pausa',
       'M: silenciar',
     ],
+    tip: 'Algo te escucha. Correr hace ruido; agachado y quieto apenas se te oye.',
     loading: 'Cargando…',
   },
   pause: {
@@ -43,6 +44,8 @@ export const TEXTS = {
     crosshair: 'Punto central',
     subtitles: 'Subtítulos de sonido',
     directionAid: 'Ayuda de dirección a la salida',
+    difficulty: 'Dificultad',
+    difficultyNames: { easy: 'Fácil', normal: 'Normal', hard: 'Difícil' },
     qualityLow: 'Baja',
     qualityMedium: 'Media',
     qualityHigh: 'Alta',
@@ -80,6 +83,14 @@ export const TEXTS = {
     promptExitLocked: 'E: salida (faltan fusibles)',
     directionAid: 'Salida',
     exhausted: 'agotado',
+    noise: 'Ruido',
+    noiseLevels: { silent: 'silencio', low: 'bajo', high: 'alto' },
+    threatNear: 'Algo cerca',
+    threatVeryNear: 'Muy cerca',
+    promptHide: (kind: 'locker' | 'wardrobe'): string =>
+      kind === 'locker' ? 'E: esconderte en la taquilla' : 'E: esconderte en el armario',
+    promptLeave: 'E: salir del escondite',
+    hidden: 'Escondido',
   },
   messages: {
     levelIntro: (id: number, name: string): string => `Nivel ${id}: ${name}`,
@@ -96,6 +107,7 @@ export const TEXTS = {
           ? 'Fusible recogido. Falta 1.'
           : `Fusible recogido. Faltan ${n}.`,
     exitActivated: 'Todos los fusibles: la salida está activa.',
+    seenHiding: 'Te ha visto entrar.',
   },
   subtitles: {
     directions: [
@@ -113,6 +125,11 @@ export const TEXTS = {
     pickup: '[Clic metálico]',
     locked: '[Zumbido seco de la puerta]',
     activated: '[La salida zumba más fuerte]',
+    steps: (dir: string): string => `[Pasos arrastrados, ${dir}]`,
+    stepsMuffled: (dir: string): string => `[Pasos arrastrados tras las paredes, ${dir}]`,
+    breath: (dir: string): string => `[Una respiración muy cerca, ${dir}]`,
+    heart: '[Tu corazón late deprisa]',
+    hideDoor: '[Puerta metálica]',
   },
   results: {
     title: 'Nivel completado',
@@ -126,6 +143,8 @@ export const TEXTS = {
     victoryText: 'Has recorrido los tres niveles sin quedarte atrapado.',
     total: 'Tiempo total',
     playAgain: 'Jugar otra vez',
+    defeatTitle: 'Te ha encontrado',
+    defeatText: 'La Escucha te alcanzó. Puedes intentarlo otra vez con la misma semilla.',
   },
   errors: {
     noWebGL:

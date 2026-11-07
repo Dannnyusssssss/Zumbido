@@ -4,6 +4,7 @@
  * de los paneles y reparte el pool de luces reales. Nunca modifica el estado del juego.
  */
 import {
+  BoxGeometry,
   Color,
   MeshBasicMaterial,
   MeshLambertMaterial,
@@ -11,9 +12,10 @@ import {
   type BufferGeometry,
 } from 'three';
 import { hashSeed, mix32 } from '../core/rng';
+import { HIDING, THREAT, WORLD } from '../data/balance';
 import type { LevelDef } from '../data/levels';
 import type { QualityPreset } from '../data/quality';
-import { flickerLevel, type FlickerParams } from '../game/flicker';
+import { creatureDim, flickerLevel, type FlickerParams } from '../game/flicker';
 import { chunkOf, keyToCx, keyToCz, type ChunkStore } from '../game/grid';
 import { planStreaming } from '../game/streaming';
 import {
@@ -36,6 +38,51 @@ export interface ViewStats {
   realLights: number;
 }
 
+const MAX_THREATS = 4;
+
+/** Posiciones de las criaturas activas; las luces cercanas a ellas se atenúan suavemente. */
+export class ThreatLights {
+  readonly x = new Float64Array(MAX_THREATS);
+  readonly z = new Float64Array(MAX_THREATS);
+  count = 0;
+  time = 0;
+  reduce = false;
+
+  set(
+    points: readonly { readonly active: boolean; readonly x: number; readonly z: number }[],
+  ): void {
+    this.count = 0;
+    for (const p of points) {
+      if (!p.active || this.count >= MAX_THREATS) continue;
+      this.x[this.count] = p.x;
+      this.z[this.count] = p.z;
+      this.count++;
+    }
+  }
+
+  /** Factor de brillo (1 = normal) de una luz en (px, pz); 1 si no hay criatura cerca. */
+  dimAt(px: number, pz: number): number {
+    if (this.reduce || this.count === 0) return 1;
+    let d = Infinity;
+    for (let i = 0; i < this.count; i++) {
+      d = Math.min(d, Math.hypot((this.x[i] as number) - px, (this.z[i] as number) - pz));
+    }
+    return creatureDim(d, this.time, false);
+  }
+
+  /** ¿Hay alguna criatura a menos del radio de atenuación de la caja dada? */
+  near(minX: number, minZ: number, maxX: number, maxZ: number): boolean {
+    if (this.reduce) return false;
+    const r = THREAT.lightDimRadius;
+    for (let i = 0; i < this.count; i++) {
+      const x = this.x[i] as number;
+      const z = this.z[i] as number;
+      if (x > minX - r && x < maxX + r && z > minZ - r && z < maxZ + r) return true;
+    }
+    return false;
+  }
+}
+
 export class WorldView {
   private readonly views = new Map<number, ChunkView>();
   /** Copia en arreglo de los chunks cargados para recorrerlos sin crear iteradores por frame. */
@@ -49,7 +96,12 @@ export class WorldView {
   private textures: WorldTextures | null = null;
   private readonly materials: ChunkMaterials;
   private readonly panelGeometry: BufferGeometry;
+  private readonly hideGeometry: BufferGeometry;
   private readonly lights: LightPool;
+  /** Criaturas cerca de las que se atenúan las luces. */
+  readonly threats = new ThreatLights();
+  /** Chunks con paneles atenuados por una criatura (hay que restaurarlos al alejarse). */
+  private readonly dimmed = new Set<number>();
   private readonly tmpColor = new Color();
   private reducedApplied = false;
   readonly stats: ViewStats = {
@@ -73,7 +125,9 @@ export class WorldView {
       wall: new MeshLambertMaterial({ color: 0xffffff }),
       shelf: new MeshLambertMaterial({ color: 0xffffff }),
       panel: new MeshBasicMaterial({ color: new Color(level.palette.panel) }),
+      hide: new MeshLambertMaterial({ color: 0xffffff }),
     };
+    this.hideGeometry = new BoxGeometry(HIDING.width, HIDING.height, HIDING.depth);
     this.panelGeometry = new PlaneGeometry(
       level.lighting.panelWidth,
       level.lighting.panelDepth,
@@ -91,7 +145,9 @@ export class WorldView {
     (m.ceiling as MeshLambertMaterial).map = this.textures.ceiling;
     (m.wall as MeshLambertMaterial).map = this.textures.wall;
     (m.shelf as MeshLambertMaterial).map = this.textures.shelf;
+    (m.hide as MeshLambertMaterial).map = this.textures.hide;
     m.shelf.needsUpdate = true;
+    m.hide.needsUpdate = true;
     m.floor.needsUpdate = true;
     m.ceiling.needsUpdate = true;
     m.wall.needsUpdate = true;
@@ -130,9 +186,11 @@ export class WorldView {
       this.materials,
       this.panelGeometry,
       this.seedHash,
+      this.hideGeometry,
     );
     this.ctx.scene.add(view.mesh);
     if (view.panels !== null) this.ctx.scene.add(view.panels);
+    if (view.hides !== null) this.ctx.scene.add(view.hides);
     this.views.set(key, view);
     this.loadedKeys.add(key);
     this.viewList.push(view);
@@ -144,6 +202,8 @@ export class WorldView {
     if (view === undefined) return;
     this.ctx.scene.remove(view.mesh);
     if (view.panels !== null) this.ctx.scene.remove(view.panels);
+    if (view.hides !== null) this.ctx.scene.remove(view.hides);
+    this.dimmed.delete(key);
     disposeChunkView(view);
     this.views.delete(key);
     this.loadedKeys.delete(key);
@@ -167,8 +227,11 @@ export class WorldView {
       }
     }
 
+    this.threats.time = time;
+    this.threats.reduce = reduceFlicker;
     this.updateFlicker(time, reduceFlicker);
-    this.lights.update(this.viewList, x, z, time, reduceFlicker);
+    this.updateThreatDim(time, reduceFlicker);
+    this.lights.update(this.viewList, x, z, time, reduceFlicker, this.threats);
 
     if (measure) {
       this.stats.loadedChunks = this.views.size;
@@ -200,8 +263,35 @@ export class WorldView {
     this.reducedApplied = reduceFlicker;
   }
 
+  /**
+   * Paneles cerca de una criatura: su brillo pasa a ser el vaivén lento de la atenuación (sustituye
+   * al parpadeo propio, nunca se suman). Al alejarse, el chunk vuelve a su brillo normal.
+   */
+  private updateThreatDim(time: number, reduceFlicker: boolean): void {
+    const size = WORLD.cellSize * WORLD.chunkCells;
+    for (const v of this.viewList) {
+      if (v.panels === null) continue;
+      const cx = keyToCx(v.key) * size;
+      const cz = keyToCz(v.key) * size;
+      const near = this.threats.near(cx, cz, cx + size, cz + size);
+      if (!near && !this.dimmed.has(v.key)) continue;
+      for (let i = 0; i < v.panelX.length; i++) {
+        const fi = v.panelFlicker[i] as number;
+        const own = fi >= 0 ? flickerLevel(v.flicker[fi] as FlickerParams, time, reduceFlicker) : 1;
+        const dim = near ? this.threats.dimAt(v.panelX[i] as number, v.panelZ[i] as number) : 1;
+        this.tmpColor.setScalar(dim < 1 ? dim : own);
+        v.panels.setColorAt(i, this.tmpColor);
+      }
+      if (v.panels.instanceColor !== null) v.panels.instanceColor.needsUpdate = true;
+      if (near) this.dimmed.add(v.key);
+      else this.dimmed.delete(v.key);
+    }
+  }
+
   dispose(): void {
     for (const key of [...this.views.keys()]) this.unload(key);
+    this.hideGeometry.dispose();
+    this.materials.hide.dispose();
     this.lights.dispose();
     this.textures?.dispose();
     this.panelGeometry.dispose();

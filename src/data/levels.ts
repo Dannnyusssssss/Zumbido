@@ -34,6 +34,8 @@ export interface GenParams {
   readonly lightDensity: number;
   /** Proporción de paneles que parpadean de forma suave. */
   readonly flickerRatio: number;
+  /** Escondites (taquillas o armarios) por chunk. */
+  readonly hides: IntRange;
 }
 
 export interface ObjectiveParams {
@@ -91,6 +93,10 @@ export interface LevelDef {
   readonly palette: Palette;
   readonly lighting: LightingParams;
   readonly audio: AudioParams;
+  /** Número de criaturas del nivel. */
+  readonly creatures: number;
+  /** Nombre del escondite en los textos ('locker' = taquilla, 'wardrobe' = armario). */
+  readonly hideKind: 'locker' | 'wardrobe';
 }
 
 export const LEVELS: readonly LevelDef[] = [
@@ -115,6 +121,7 @@ export const LEVELS: readonly LevelDef[] = [
       minLoops: 8,
       lightDensity: 0.85,
       flickerRatio: 0.06,
+      hides: { min: 1, max: 3 },
     },
     objective: {
       exitChunks: { min: 2, max: 3 },
@@ -145,6 +152,8 @@ export const LEVELS: readonly LevelDef[] = [
       fogScale: 1,
     },
     audio: { reverb: 0.08, reverbSeconds: 0.6 },
+    creatures: 1,
+    hideKind: 'locker',
   },
   {
     id: 2,
@@ -167,6 +176,7 @@ export const LEVELS: readonly LevelDef[] = [
       minLoops: 20,
       lightDensity: 0.7,
       flickerRatio: 0.07,
+      hides: { min: 1, max: 2 },
     },
     objective: {
       exitChunks: { min: 3, max: 4 },
@@ -197,6 +207,8 @@ export const LEVELS: readonly LevelDef[] = [
       fogScale: 1,
     },
     audio: { reverb: 0.45, reverbSeconds: 2.6 },
+    creatures: 1,
+    hideKind: 'wardrobe',
   },
   {
     id: 3,
@@ -219,6 +231,7 @@ export const LEVELS: readonly LevelDef[] = [
       minLoops: 6,
       lightDensity: 0.45,
       flickerRatio: 0.08,
+      hides: { min: 1, max: 3 },
     },
     objective: {
       exitChunks: { min: 3, max: 5 },
@@ -249,6 +262,8 @@ export const LEVELS: readonly LevelDef[] = [
       fogScale: 0.8,
     },
     audio: { reverb: 0.25, reverbSeconds: 1.6 },
+    creatures: 2,
+    hideKind: 'locker',
   },
 ];
 

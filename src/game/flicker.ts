@@ -2,7 +2,7 @@
  * Parpadeo suave y determinista de los paneles de luz.
  * Devuelve un factor de brillo en [1 - depth, 1]; con "Reducir parpadeo" siempre 1.
  */
-import { FLICKER } from '../data/balance';
+import { FLICKER, THREAT } from '../data/balance';
 import { hash3, hashToUnit } from '../core/rng';
 import { smoothstep, TAU } from '../core/math';
 
@@ -60,4 +60,16 @@ export function flickerLevel(p: FlickerParams, t: number, reduceFlicker: boolean
     0.25 * Math.sin(TAU * p.freq * t + p.phase) +
     0.25 * Math.sin(TAU * p.freq * FLICKER.secondRatio * t + p.phase2);
   return 1 - FLICKER.depth * episode * wave;
+}
+
+/**
+ * Atenuación de un panel por la cercanía de la criatura: un vaivén lento (1,3 Hz, por debajo de
+ * 3 por segundo) que nunca baja del 70 %. Cerca de la criatura sustituye al parpadeo propio del
+ * panel (no se suman dos ondas). Con "Reducir parpadeo" no hace nada.
+ */
+export function creatureDim(dist: number, t: number, reduceFlicker: boolean): number {
+  if (reduceFlicker || dist >= THREAT.lightDimRadius) return 1;
+  const closeness = 1 - dist / THREAT.lightDimRadius;
+  const wave = 0.5 + 0.5 * Math.sin(TAU * THREAT.lightDimHz * t);
+  return 1 - THREAT.lightDimDepth * closeness * wave;
 }

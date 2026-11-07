@@ -3,7 +3,7 @@
  * Tolera datos ausentes, corruptos o de otra versión: valida campo por campo
  * y usa valores por defecto. Nunca lanza excepciones hacia el juego.
  */
-import { SETTINGS_LIMITS } from '../data/balance';
+import { DIFFICULTIES, SETTINGS_LIMITS, type Difficulty } from '../data/balance';
 import { META } from '../data/meta';
 import { QUALITIES, type Quality } from '../data/quality';
 import { normalizeSeed } from '../core/params';
@@ -22,6 +22,8 @@ export interface Settings {
   subtitles: boolean;
   /** Ayuda opcional de dirección aproximada a la salida. */
   directionAid: boolean;
+  /** Dificultad de la criatura. */
+  difficulty: Difficulty;
 }
 
 export interface SaveData {
@@ -52,6 +54,7 @@ export function defaultSettings(prefersReducedMotion: boolean): Settings {
     crosshair: true,
     subtitles: true,
     directionAid: false,
+    difficulty: 'normal',
   };
 }
 
@@ -82,6 +85,12 @@ function readQuality(v: unknown, fallback: Quality): Quality {
     : fallback;
 }
 
+function readDifficulty(v: unknown, fallback: Difficulty): Difficulty {
+  return typeof v === 'string' && (DIFFICULTIES as readonly string[]).includes(v)
+    ? (v as Difficulty)
+    : fallback;
+}
+
 /** Valida unos ajustes desconocidos campo por campo. */
 export function sanitizeSettings(raw: unknown, prefersReducedMotion: boolean): Settings {
   const d = defaultSettings(prefersReducedMotion);
@@ -98,6 +107,8 @@ export function sanitizeSettings(raw: unknown, prefersReducedMotion: boolean): S
     crosshair: readBool(raw.crosshair, d.crosshair),
     subtitles: readBool(raw.subtitles, d.subtitles),
     directionAid: readBool(raw.directionAid, d.directionAid),
+    // Los guardados de los hitos anteriores no la tienen: Normal.
+    difficulty: readDifficulty(raw.difficulty, d.difficulty),
   };
 }
 

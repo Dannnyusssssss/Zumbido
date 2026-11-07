@@ -96,7 +96,12 @@ export interface WallQuery {
   column(gx: number, gz: number): boolean;
 }
 
-export class WorldGrid implements WallQuery {
+/** Luz del techo: ¿hay un panel en la celda o en alguna de las 8 vecinas? */
+export interface LightQuery {
+  lit(gx: number, gz: number): boolean;
+}
+
+export class WorldGrid implements WallQuery, LightQuery {
   constructor(readonly store: ChunkStore) {}
 
   wallV(lineX: number, gz: number): number {
@@ -122,6 +127,20 @@ export class WorldGrid implements WallQuery {
     if (!insideWorld(cx, cz)) return false;
     const chunk = this.store.get(cx, cz);
     return chunk.columns[cellIndex(gx - cx * N, gz - cz * N)] === 1;
+  }
+
+  private panel(gx: number, gz: number): boolean {
+    const cx = chunkOfCell(gx);
+    const cz = chunkOfCell(gz);
+    if (!insideWorld(cx, cz)) return false;
+    return this.store.get(cx, cz).panels[cellIndex(gx - cx * N, gz - cz * N)] === 1;
+  }
+
+  lit(gx: number, gz: number): boolean {
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) if (this.panel(gx + dx, gz + dz)) return true;
+    }
+    return false;
   }
 }
 

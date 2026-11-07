@@ -11,6 +11,8 @@ export interface WorldTextures {
   wall: CanvasTexture;
   ceiling: CanvasTexture;
   shelf: CanvasTexture;
+  /** Frente de las taquillas o armarios (escondites). */
+  hide: CanvasTexture;
   dispose(): void;
 }
 
@@ -267,6 +269,70 @@ function drawShelf(ctx: CanvasRenderingContext2D, rng: Rng, size: number, p: Pal
   ctx.fillRect(size - post, 0, post, size);
 }
 
+/**
+ * Escondite: taquilla metálica con rejilla de ventilación arriba (rendijas por las que se mira)
+ * o armario de chapa con dos puertas. Sin rótulos ni logotipos.
+ */
+function drawHide(
+  ctx: CanvasRenderingContext2D,
+  rng: Rng,
+  size: number,
+  kind: 'locker' | 'wardrobe',
+): void {
+  const base = kind === 'locker' ? '#5d6a66' : '#6a6458';
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, size, size);
+  // Desgaste suave de la pintura.
+  for (let i = 0; i < 40; i++) {
+    ctx.fillStyle = `rgba(30,30,25,${rng.range(0.04, 0.12)})`;
+    ctx.fillRect(
+      rng.range(0, size),
+      rng.range(0, size),
+      rng.range(2, size * 0.1),
+      rng.range(2, size * 0.06),
+    );
+  }
+  const edge = Math.max(2, Math.round(size * 0.02));
+  ctx.fillStyle = 'rgba(15,15,12,0.7)';
+  if (kind === 'wardrobe') {
+    // Dos puertas y dos tiradores.
+    ctx.fillRect(Math.round(size / 2) - edge / 2, 0, edge, size);
+    ctx.fillRect(
+      Math.round(size * 0.44),
+      Math.round(size * 0.45),
+      edge * 2,
+      Math.round(size * 0.1),
+    );
+    ctx.fillRect(
+      Math.round(size * 0.54),
+      Math.round(size * 0.45),
+      edge * 2,
+      Math.round(size * 0.1),
+    );
+  } else {
+    // Rejilla de ventilación arriba y tirador a media altura.
+    for (let i = 0; i < 6; i++) {
+      const y = Math.round(size * (0.08 + i * 0.035));
+      ctx.fillRect(
+        Math.round(size * 0.25),
+        y,
+        Math.round(size * 0.5),
+        Math.max(2, Math.round(size * 0.012)),
+      );
+    }
+    ctx.fillRect(
+      Math.round(size * 0.8),
+      Math.round(size * 0.45),
+      edge * 2,
+      Math.round(size * 0.12),
+    );
+  }
+  // Marco.
+  ctx.strokeStyle = 'rgba(15,15,12,0.8)';
+  ctx.lineWidth = edge;
+  ctx.strokeRect(edge / 2, edge / 2, size - edge, size - edge);
+}
+
 /** Crea las texturas del nivel según su estilo. */
 export function createWorldTextures(
   seed: number,
@@ -294,16 +360,22 @@ export function createWorldTextures(
     drawDarkCeiling(cctx, rng, size, p);
   }
   drawShelf(sctx, rng, size, p);
+  // Se dibuja al final: no cambia el resto de texturas de cada semilla.
+  const [hc, hctx] = canvas(size);
+  drawHide(hctx, rng, size, level.hideKind);
   const floor = toTexture(fc, anisotropy);
   const wall = toTexture(wc, anisotropy);
   const ceiling = toTexture(cc, anisotropy);
   const shelf = toTexture(sc, anisotropy);
+  const hide = toTexture(hc, anisotropy);
   return {
     floor,
     wall,
     ceiling,
     shelf,
+    hide,
     dispose() {
+      hide.dispose();
       floor.dispose();
       wall.dispose();
       ceiling.dispose();

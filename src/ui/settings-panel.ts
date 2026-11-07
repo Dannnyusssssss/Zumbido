@@ -2,7 +2,7 @@
  * Controles de ajustes. Se usan en el panel de ajustes completo y, para las opciones de comodidad,
  * también directamente en las pantallas de inicio y pausa. Todos se mantienen sincronizados.
  */
-import { SETTINGS_LIMITS } from '../data/balance';
+import { DIFFICULTIES, SETTINGS_LIMITS } from '../data/balance';
 import { QUALITIES, type Quality } from '../data/quality';
 import { TEXTS } from '../data/texts';
 import type { Settings } from '../save/storage';
@@ -102,6 +102,28 @@ export class SettingsControls {
     ]);
   }
 
+  /** Selector de dificultad (se guarda; se aplica al empezar o reintentar un nivel). */
+  difficulty(): HTMLElement {
+    const id = nextId('difficulty');
+    const names = TEXTS.settings.difficultyNames;
+    const select = el(
+      'select',
+      { attrs: { id } },
+      DIFFICULTIES.map((d) => el('option', { text: names[d], attrs: { value: d } })),
+    );
+    select.addEventListener('change', () => {
+      const d = DIFFICULTIES.find((v) => v === select.value);
+      if (d !== undefined) this.change({ difficulty: d });
+    });
+    this.syncers.push((s) => {
+      select.value = s.difficulty;
+    });
+    return el('div', { className: 'field field-select' }, [
+      el('label', { text: TEXTS.settings.difficulty, attrs: { for: id } }),
+      select,
+    ]);
+  }
+
   /** Refleja los ajustes actuales en todos los controles creados. */
   sync(): void {
     const s = this.get();
@@ -122,6 +144,7 @@ export class SettingsControls {
       this.slider('sensitivity', t.sensitivity, 0.05, (v) => v.toFixed(2)),
       this.slider('fov', t.fov, 1, (v) => `${Math.round(v)}°`),
       this.quality(),
+      this.difficulty(),
     ]);
   }
 }

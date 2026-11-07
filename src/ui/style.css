@@ -313,10 +313,136 @@ select {
   top: 16px;
 }
 
+/* Ruido del jugador: barras y texto (no depende solo del color). */
+.noise {
+  position: absolute;
+  left: 16px;
+  bottom: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(10, 9, 5, 0.78);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 0.95rem;
+  text-shadow: 0 1px 2px #000;
+}
+
+.noise-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 14px;
+}
+
+.noise-bar {
+  width: 5px;
+  background: #3a331b;
+  border: 1px solid var(--border);
+}
+
+.noise-bar:nth-child(1) {
+  height: 30%;
+}
+.noise-bar:nth-child(2) {
+  height: 47%;
+}
+.noise-bar:nth-child(3) {
+  height: 64%;
+}
+.noise-bar:nth-child(4) {
+  height: 82%;
+}
+.noise-bar:nth-child(5) {
+  height: 100%;
+}
+
+.noise-bar.on {
+  background: var(--accent);
+}
+
+.noise.high .noise-bar.on {
+  background: #f0a35a;
+}
+
+/* Cercanía de la criatura: texto con flecha y dirección. */
+.threat {
+  position: absolute;
+  left: 50%;
+  top: 58px;
+  transform: translateX(-50%);
+  background: rgba(16, 6, 6, 0.85);
+  border: 1px solid #7a3b2e;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 1rem;
+  text-shadow: 0 1px 2px #000;
+}
+
+.threat.very-near {
+  border-width: 2px;
+  font-weight: 600;
+}
+
+/* Viñeta direccional: bordes oscuros del lado de la criatura (opacidades en variables CSS). */
+.vignette {
+  position: absolute;
+  inset: 0;
+  --v: 0;
+  --vf: 0;
+  --vb: 0;
+  --vl: 0;
+  --vr: 0;
+  background:
+    linear-gradient(to right, rgba(12, 2, 2, var(--vl)) 0%, rgba(12, 2, 2, 0) 30%),
+    linear-gradient(to left, rgba(12, 2, 2, var(--vr)) 0%, rgba(12, 2, 2, 0) 30%),
+    linear-gradient(to bottom, rgba(12, 2, 2, var(--vf)) 0%, rgba(12, 2, 2, 0) 26%),
+    linear-gradient(to top, rgba(12, 2, 2, var(--vb)) 0%, rgba(12, 2, 2, 0) 30%),
+    radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(8, 2, 2, var(--v)) 100%);
+}
+
+/* Dentro de un escondite: la vista llega por unas rendijas horizontales. */
+.hide-slits {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(6, 6, 5, 0.97) 0 7vh,
+    rgba(6, 6, 5, 0.25) 7vh 10vh
+  );
+}
+
+.hide-label {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  background: rgba(10, 9, 5, 0.9);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+/* Fundido a negro (escondites y derrota). Por debajo de los paneles de la interfaz. */
+.fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* En pantallas bajas, la indicación de interacción va sobre el punto central para no tapar los subtítulos. */
+@media (max-height: 600px) {
+  .prompt {
+    top: calc(50% - 72px);
+  }
+}
+
 .subtitles {
   position: absolute;
   left: 50%;
-  bottom: 90px;
+  bottom: 110px;
   transform: translateX(-50%);
   width: min(640px, calc(100% - 32px));
   text-align: center;

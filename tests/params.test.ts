@@ -20,18 +20,32 @@ describe('normalizeSeed', () => {
 
 describe('parseDebugParams', () => {
   it('detecta debug y semilla', () => {
-    expect(parseDebugParams('?debug&seed=abc')).toEqual({ debug: true, seed: 'ABC' });
-    expect(parseDebugParams('?debug=1')).toEqual({ debug: true, seed: null });
+    expect(parseDebugParams('?debug&seed=abc')).toEqual({
+      debug: true,
+      seed: 'ABC',
+      creatures: true,
+    });
+    expect(parseDebugParams('?debug=1')).toEqual({ debug: true, seed: null, creatures: true });
   });
   it('por defecto todo desactivado', () => {
-    expect(parseDebugParams('')).toEqual({ debug: false, seed: null });
-    expect(parseDebugParams('?debug=0&seed=%%%')).toEqual({ debug: false, seed: null });
+    expect(parseDebugParams('')).toEqual({ debug: false, seed: null, creatures: true });
+    expect(parseDebugParams('?debug=0&seed=%%%')).toEqual({
+      debug: false,
+      seed: null,
+      creatures: true,
+    });
   });
   it('ignora cadenas enormes', () => {
     expect(parseDebugParams('?debug&seed=' + 'A'.repeat(2000))).toEqual({
       debug: false,
       seed: null,
+      creatures: true,
     });
+  });
+  it('creature=off desactiva las criaturas; cualquier otro valor no', () => {
+    expect(parseDebugParams('?creature=off').creatures).toBe(false);
+    expect(parseDebugParams('?creature=on').creatures).toBe(true);
+    expect(parseDebugParams('?creature=OFF').creatures).toBe(true);
   });
 });
 

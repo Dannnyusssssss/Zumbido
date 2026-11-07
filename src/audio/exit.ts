@@ -1,15 +1,16 @@
 /**
  * Zumbido propio de la salida: más grave e irregular que el de los fluorescentes (180 y 270 Hz con
  * un vaivén lento), posicional con PannerNode para saber de qué lado y a qué distancia está.
- * Inactiva suena débil; con todos los fusibles, algo más fuerte. Su señal visual es la luz de la
- * puerta y el subtítulo de sonido.
+ * Inactiva suena débil; con todos los fusibles, algo más fuerte. Con paredes de por medio, un paso
+ * bajo lo apaga (oclusión). Su señal visual es la luz de la puerta y el subtítulo de sonido.
  */
-import { SOUND } from '../data/balance';
+import { CREATURE_SOUND, SOUND } from '../data/balance';
 import type { AudioEngine } from './engine';
 
 export class ExitHum {
   private panner: PannerNode | null = null;
   private gain: GainNode | null = null;
+  private lowpass: BiquadFilterNode | null = null;
   private readonly sources: Array<OscillatorNode> = [];
 
   constructor(
@@ -64,7 +65,21 @@ export class ExitHum {
     lfo.connect(depth).connect(mix.gain);
     lfo.start(now);
     this.sources.push(lfo);
-    mix.connect(this.gain);
+    this.lowpass = ctx.createBiquadFilter();
+    this.lowpass.type = 'lowpass';
+    this.lowpass.frequency.value = CREATURE_SOUND.openCutoff;
+    mix.connect(this.lowpass).connect(this.gain);
+  }
+
+  /** Oclusión: con paredes entre la salida y el jugador suena apagado. */
+  setOccluded(occluded: boolean): void {
+    const ctx = this.engine.ctx;
+    if (ctx === null || this.lowpass === null) return;
+    this.lowpass.frequency.setTargetAtTime(
+      occluded ? CREATURE_SOUND.occludedCutoff : CREATURE_SOUND.openCutoff,
+      ctx.currentTime,
+      0.3,
+    );
   }
 
   setActive(active: boolean): void {
@@ -87,6 +102,7 @@ export class ExitHum {
       s.disconnect();
     }
     this.sources.length = 0;
+    this.lowpass?.disconnect();
     this.gain?.disconnect();
     this.panner?.disconnect();
   }

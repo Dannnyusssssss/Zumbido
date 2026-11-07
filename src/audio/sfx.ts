@@ -1,11 +1,12 @@
 /**
- * Efectos breves sintetizados: tiza raspando, fusible recogido, salida bloqueada y salida activada.
+ * Efectos breves sintetizados: tiza raspando, fusible recogido, salida bloqueada, salida activada
+ * y la puerta metálica de un escondite.
  * Volumen moderado y envolventes suaves (sin picos). Pasan por el bus del mundo, que lleva el eco del nivel.
  */
 import { SOUND } from '../data/balance';
 import type { AudioEngine } from './engine';
 
-export type SfxName = 'chalk' | 'pickup' | 'locked' | 'activated';
+export type SfxName = 'chalk' | 'pickup' | 'locked' | 'activated' | 'hide';
 
 export class Sfx {
   private noise: AudioBuffer | null = null;
@@ -75,6 +76,22 @@ export class Sfx {
     } else if (name === 'pickup') {
       this.tone(ctx, out, 660, now, 0.35, 0.35);
       this.tone(ctx, out, 990, now + 0.09, 0.4, 0.25);
+    } else if (name === 'hide') {
+      // Puerta metálica: un chasquido corto en banda media y un tono grave que se apaga rápido.
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuffer(ctx);
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = 1500;
+      band.Q.value = 3;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.3, now + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+      src.connect(band).connect(g).connect(out);
+      src.start(now);
+      src.stop(now + 0.15);
+      this.tone(ctx, out, 210, now + 0.02, 0.25, 0.18, 'triangle');
     } else if (name === 'locked') {
       this.tone(ctx, out, 140, now, 0.3, 0.4, 'square');
     } else {

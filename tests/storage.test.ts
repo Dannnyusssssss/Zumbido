@@ -34,6 +34,24 @@ class BrokenStorage implements StorageLike {
 }
 
 describe('persistencia', () => {
+  it('la dificultad se guarda y se valida (Normal si falta o no es válida)', () => {
+    const storage = new MemoryStorage();
+    const data: SaveData = defaultSave(false);
+    expect(data.settings.difficulty).toBe('normal');
+    data.settings.difficulty = 'hard';
+    writeSave(storage, data);
+    expect(loadSave(storage, false).settings.difficulty).toBe('hard');
+    for (const bad of ['imposible', 3, null, '']) {
+      storage.setItem(META.storageKey, JSON.stringify({ settings: { difficulty: bad } }));
+      expect(loadSave(storage, false).settings.difficulty).toBe('normal');
+    }
+    // Guardado de un hito anterior, sin dificultad: conserva sus ajustes y usa Normal.
+    storage.setItem(META.storageKey, JSON.stringify({ version: 1, settings: { fov: 88 } }));
+    const old = loadSave(storage, false);
+    expect(old.settings.fov).toBe(88);
+    expect(old.settings.difficulty).toBe('normal');
+  });
+
   it('sin datos devuelve los valores por defecto', () => {
     const save = loadSave(new MemoryStorage(), false);
     expect(save).toEqual(defaultSave(false));

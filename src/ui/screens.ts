@@ -25,7 +25,16 @@ export interface ScreenActions {
 }
 
 export type Panel =
-  'loading' | 'start' | 'select' | 'pause' | 'settings' | 'levelEnd' | 'victory' | 'error' | 'none';
+  | 'loading'
+  | 'start'
+  | 'select'
+  | 'pause'
+  | 'settings'
+  | 'levelEnd'
+  | 'victory'
+  | 'defeat'
+  | 'error'
+  | 'none';
 
 export interface LevelEndInfo {
   levelName: string;
@@ -65,6 +74,7 @@ export class Screens {
   private readonly endRetry: HTMLButtonElement;
   private readonly victoryStats: HTMLElement;
   private readonly victoryAgain: HTMLButtonElement;
+  private readonly defeatRetry: HTMLButtonElement;
   private settingsReturn: Panel = 'start';
   private current: Panel = 'loading';
   private noticeTimer = 0;
@@ -106,6 +116,7 @@ export class Screens {
             {},
             t.start.instructions.map((line) => el('li', { text: line })),
           ),
+          el('p', { className: 'small', text: t.start.tip }),
         ]),
         el('div', { className: 'actions' }, [
           this.playButton,
@@ -164,6 +175,7 @@ export class Screens {
           el('p', { className: 'small', text: s.seedHint, attrs: { id: 'seed-hint' } }),
           this.seedError,
         ]),
+        controls.difficulty(),
         el('h2', { text: s.modeTitle }),
         el('div', { className: 'actions' }, [this.fullRunButton]),
         this.bestRunText,
@@ -233,6 +245,20 @@ export class Screens {
         this.victoryStats,
         el('div', { className: 'actions' }, [
           this.victoryAgain,
+          button(r.menu, () => actions.menu()),
+        ]),
+      ]),
+    );
+
+    // Derrota: la criatura te alcanzó. Solo acciones internas.
+    this.defeatRetry = button(r.retry, () => actions.retry(), 'btn btn-primary');
+    this.add(
+      'defeat',
+      el('section', { className: 'panel', attrs: { 'aria-labelledby': 'title-defeat' } }, [
+        el('h1', { text: r.defeatTitle, attrs: { id: 'title-defeat' } }),
+        el('p', { className: 'subtitle', text: r.defeatText }),
+        el('div', { className: 'actions' }, [
+          this.defeatRetry,
           button(r.menu, () => actions.menu()),
         ]),
       ]),
@@ -380,6 +406,11 @@ export class Screens {
     );
     this.showPanel('victory');
     this.victoryAgain.focus();
+  }
+
+  showDefeat(): void {
+    this.showPanel('defeat');
+    this.defeatRetry.focus();
   }
 
   hide(): void {

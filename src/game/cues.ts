@@ -20,3 +20,31 @@ export function sectorOf(angle: number): Sector {
 
 /** Flechas por sector (delante, delante-izquierda, izquierda, ...). */
 export const SECTOR_ARROWS: readonly string[] = ['↑', '↖', '←', '↙', '↓', '↘', '→', '↗'];
+
+/** Lo mínimo de una criatura que necesitan las señales de cercanía. */
+export interface ThreatSource {
+  readonly active: boolean;
+  readonly x: number;
+  readonly z: number;
+  /** Metros por camino hasta el jugador (Infinity si está lejos o no se llega). */
+  readonly threatDistance: number;
+}
+
+/** Índice de la criatura más cercana por camino, o -1 si ninguna está al alcance de las señales. */
+export function nearestThreat(sources: readonly ThreatSource[]): number {
+  let best = -1;
+  let bestD = Infinity;
+  sources.forEach((s, i) => {
+    if (s.active && s.threatDistance < bestD) {
+      bestD = s.threatDistance;
+      best = i;
+    }
+  });
+  return best;
+}
+
+/** Cercanía 0..1 (1 encima, 0 a `range` metros o más). */
+export function closeness(distance: number, range: number): number {
+  if (!Number.isFinite(distance) || range <= 0) return 0;
+  return Math.max(0, Math.min(1, 1 - distance / range));
+}

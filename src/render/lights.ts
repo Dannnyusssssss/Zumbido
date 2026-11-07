@@ -8,6 +8,11 @@ import type { LevelDef } from '../data/levels';
 import { flickerLevel, type FlickerParams } from '../game/flicker';
 import type { ChunkView } from './chunk-mesh';
 
+/** Atenuación por la cercanía de una criatura (1 = sin cambio). */
+export interface LightDimmer {
+  dimAt(x: number, z: number): number;
+}
+
 const MAX_LIGHTS = 8;
 
 export class LightPool {
@@ -69,6 +74,7 @@ export class LightPool {
     z: number,
     time: number,
     reduceFlicker: boolean,
+    dimmer: LightDimmer,
   ): void {
     const n = this.count + 1;
     const maxD = this.level.lighting.pointDistance * 1.6;
@@ -83,8 +89,10 @@ export class LightPool {
         const d = dx * dx + dz * dz;
         if (d >= maxD2) continue;
         const fi = v.panelFlicker[i] as number;
-        const f = fi >= 0 ? flickerLevel(v.flicker[fi] as FlickerParams, time, reduceFlicker) : 1;
-        this.insert(d, px, pz, f);
+        const own = fi >= 0 ? flickerLevel(v.flicker[fi] as FlickerParams, time, reduceFlicker) : 1;
+        // Cerca de una criatura manda su atenuación (igual que en los paneles).
+        const dim = dimmer.dimAt(px, pz);
+        this.insert(d, px, pz, dim < 1 ? dim : own);
       }
     }
     // El (count + 1)-ésimo panel marca la distancia de corte: en ella la intensidad llega a 0.

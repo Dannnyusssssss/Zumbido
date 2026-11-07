@@ -6,12 +6,13 @@
 import { startAmbientHum } from './audio/ambient';
 import { AudioEngine } from './audio/engine';
 import { ExitHum } from './audio/exit';
+import { SceneAudio } from './audio/scene-audio';
 import { Sfx } from './audio/sfx';
 import { InputState } from './core/input';
 import { FixedStepLoop } from './core/loop';
 import { parseDebugParams, seedFromBytes } from './core/params';
 import { dailySeed } from './core/seeds';
-import { OBJECTS } from './data/balance';
+import { HIDING, OBJECTS } from './data/balance';
 import type { Action } from './data/controls';
 import { getLevel } from './data/levels';
 import { META } from './data/meta';
@@ -31,6 +32,7 @@ import {
 } from './game/run';
 import { World, type GameEvent } from './game/world';
 import { CameraRig } from './render/camera-rig';
+import { EnemyView } from './render/enemy-mesh';
 import { Hud } from './render/hud';
 import { ObjectsView } from './render/objects';
 import {
@@ -51,9 +53,22 @@ import {
 import { InputBinding } from './ui/input-binding';
 import { Screens } from './ui/screens';
 import { SettingsControls } from './ui/settings-panel';
+import { ThreatCues } from './ui/threat-cues';
 
 type State =
-  'loading' | 'start' | 'select' | 'playing' | 'paused' | 'levelEnd' | 'victory' | 'error';
+  | 'loading'
+  | 'start'
+  | 'select'
+  | 'playing'
+  | 'paused'
+  | 'levelEnd'
+  | 'victory'
+  | 'dying'
+  | 'defeat'
+  | 'error';
+
+/** Duración del fundido a negro tras la captura (sin golpe de sonido). */
+const DEFEAT_FADE_SECONDS = 1.5;
 
 function getStorage(): StorageLike | null {
   try {
@@ -91,6 +106,8 @@ class Game {
   private readonly loop = new FixedStepLoop(60);
   private readonly audio = new AudioEngine();
   private readonly sfx = new Sfx(this.audio);
+  private readonly sceneAudio = new SceneAudio(this.audio);
+  private readonly threatCues = new ThreatCues();
   private readonly controls: SettingsControls;
   private readonly screens: Screens;
   private readonly hud: Hud;
@@ -100,6 +117,11 @@ class Game {
   private view: WorldView | null = null;
   private objects: ObjectsView | null = null;
   private exitHum: ExitHum | null = null;
+  private enemyView: EnemyView | null = null;
+  /** Fundido al entrar o salir de un escondite (segundos restantes). */
+  private hideFade = 0;
+  /** Segundos desde la captura (fundido antes de la pantalla de derrota). */
+  private dyingTime = 0;
   private rig: CameraRig | null = null;
   private binding: InputBinding | null = null;
   private run: RunState | null = null;
@@ -188,12 +210,23 @@ class Game {
     this.view?.dispose();
     this.objects?.dispose();
     this.exitHum?.dispose();
+    this.enemyView?.dispose();
     const level = getLevel(levelId);
-    const world = new World(seed, level);
+    // La dificultad se aplica al cargar el nivel; ?creature=off (depuración) quita las criaturas.
+    const world = new World(seed, level, {
+      difficulty: this.settings.difficulty,
+      creatures: this.params.creatures,
+    });
     this.world = world;
     applyLevelLook(ctx, level);
     this.view = new WorldView(ctx, world.store, level, world.seed);
     this.objects = new ObjectsView(ctx.scene, world);
+    this.enemyView = new EnemyView(ctx.scene, world.enemies.length);
+    this.sceneAudio.setWorld(world);
+    this.threatCues.reset();
+    this.hideFade = 0;
+    this.dyingTime = 0;
+    this.hud.setFade(0);
     this.rig = new CameraRig(ctx.camera);
     this.applyQuality();
     this.view.warmUp(world.player.x, world.player.z, 9);
@@ -295,6 +328,7 @@ class Game {
 
   private toMenu(): void {
     this.state = 'start';
+    this.hud.setFade(0);
     this.run = null;
     this.binding?.releaseLock();
     this.hud.setVisible(false);
@@ -361,6 +395,21 @@ class Game {
     });
   }
 
+  /** La criatura alcanzó al jugador: se suelta el ratón y la pantalla funde a negro. */
+  private onCaught(): void {
+    this.state = 'dying';
+    this.dyingTime = 0;
+    this.input.clear();
+    this.binding?.releaseLock();
+    this.hud.setVisible(false);
+  }
+
+  private showDefeat(): void {
+    this.state = 'defeat';
+    this.audio.suspend();
+    this.screens.showDefeat();
+  }
+
   private onAction(action: Action, code: string): void {
     if (action === 'mute') {
       const muted = !this.settings.muted;
@@ -368,6 +417,7 @@ class Game {
       this.screens.toast(muted ? TEXTS.notices.muted : TEXTS.notices.unmuted, 2);
       return;
     }
+    if (this.state === 'dying') return;
     const panel = this.screens.panel;
     // Pausa: Esc o P mientras se juega; en la pausa, P continúa y Esc cierra los ajustes.
     if (this.state === 'playing') this.pause();
@@ -403,6 +453,14 @@ class Game {
         this.sfx.play('locked');
         this.screens.toast(m.exitLocked(e.missing), 3);
         if (subs) this.hud.subtitle(sub.locked, now);
+      } else if (e.type === 'hide') {
+        // Fundido corto desde negro: oculta el corte de posición al entrar o salir.
+        this.hideFade = HIDING.fadeSeconds;
+        this.sfx.play('hide');
+        if (subs) this.hud.subtitle(sub.hideDoor, now);
+        if (e.seen) this.screens.toast(m.seenHiding, 3);
+      } else if (e.type === 'caught') {
+        this.onCaught();
       } else {
         this.onLevelComplete();
       }
@@ -414,16 +472,22 @@ class Game {
     const p = world.player;
     this.hud.setStamina(world.stamina.ratio, world.stamina.exhausted);
     this.hud.setFuses(world.fusesCollected, world.fusesRequired);
+    this.hud.setNoise(world.noiseLevel, world.recentNoise);
+    this.hud.setHidden(world.hidden !== null);
     const f = world.focus;
     const h = TEXTS.hud;
     this.hud.setPrompt(
-      f === null
-        ? ''
-        : f.kind === 'fuse'
-          ? h.promptFuse
-          : world.exitActive
-            ? h.promptExit
-            : h.promptExitLocked,
+      world.hidden !== null
+        ? h.promptLeave
+        : world.focusHide !== null
+          ? h.promptHide(world.level.hideKind)
+          : f === null
+            ? ''
+            : f.kind === 'fuse'
+              ? h.promptFuse
+              : world.exitActive
+                ? h.promptExit
+                : h.promptExitLocked,
     );
     const exit = world.layout.exit;
     const sector = sectorOf(relativeAngle(p.x, p.z, p.yaw, exit.x, exit.z));
@@ -469,9 +533,22 @@ class Game {
       );
       alpha = this.loop.advance(frameDt, (dt) => world.step(dt, this.input));
       this.handleEvents(world, now);
-      if (this.state === 'playing') this.updateHud(world, now);
+      if (this.state === 'playing') {
+        this.updateHud(world, now);
+        this.threatCues.update(world, this.hud, now, this.settings.subtitles);
+      }
+      this.sceneAudio.update(world, this.exitHum, frameDt);
+    } else if (this.state === 'dying') {
+      this.dyingTime += frameDt;
+      if (this.dyingTime >= DEFEAT_FADE_SECONDS) this.showDefeat();
     }
     this.hud.tick(now);
+    this.hideFade = Math.max(0, this.hideFade - frameDt);
+    const dying =
+      this.state === 'dying' || this.state === 'defeat'
+        ? Math.min(1, this.dyingTime / DEFEAT_FADE_SECONDS)
+        : 0;
+    this.hud.setFade(Math.max(dying, this.hideFade / HIDING.fadeSeconds));
 
     const s = this.settings;
     this.rig.update(world.player, alpha, frameDt, s);
@@ -479,6 +556,8 @@ class Game {
     const debug = this.hud.debugEnabled;
     this.view.update(cam.x, cam.z, world.time, s.reduceFlicker, debug);
     this.objects?.update(world);
+    this.enemyView?.update(world.enemies, alpha);
+    this.view.threats.set(world.enemies);
     this.audio.setListener(cam.x, cam.y, cam.z, world.player.yaw);
     ctx.renderer.render(ctx.scene, ctx.camera);
 
@@ -512,6 +591,12 @@ class Game {
       geometries: info.memory.geometries,
       textures: info.memory.textures,
       cachedChunks: world.store.size,
+      creatures: world.enemies.map(
+        (e, i) =>
+          `Criatura ${i + 1}: ${e.state} · en ${e.x.toFixed(1)}, ${e.z.toFixed(1)} · camino ${
+            Number.isFinite(e.threatDistance) ? e.threatDistance.toFixed(1) : '—'
+          } m · ${e.seesPlayer ? 'te ve' : 'no te ve'} · oído ${e.heard.toFixed(2)}`,
+      ),
     });
   }
 }

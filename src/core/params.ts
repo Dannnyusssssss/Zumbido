@@ -12,6 +12,8 @@ export function normalizeSeed(raw: string | null | undefined): string | null {
 export interface DebugParams {
   debug: boolean;
   seed: string | null;
+  /** false con `?creature=off`: partida sin criaturas para probar el mundo. */
+  creatures: boolean;
 }
 
 /** Interpreta la cadena de búsqueda (`location.search`). */
@@ -21,7 +23,8 @@ export function parseDebugParams(search: string): DebugParams {
   const debugValue = params.get('debug');
   const debug =
     debugValue !== null && (debugValue === '' || debugValue === '1' || debugValue === 'true');
-  return { debug, seed: normalizeSeed(params.get('seed')) };
+  const creatures = params.get('creature') !== 'off';
+  return { debug, seed: normalizeSeed(params.get('seed')), creatures };
 }
 
 const SEED_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';

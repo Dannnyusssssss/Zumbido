@@ -1,9 +1,12 @@
 /**
- * HUD en DOM: punto central, resistencia, fusibles, indicación de interacción, subtítulos de sonido,
- * ayuda de dirección y overlay de depuración. Todo lleva texto además de color.
- * Solo actualiza el DOM cuando cambia lo que muestra.
+ * HUD en DOM: punto central, resistencia, fusibles, ruido del jugador, cercanía de la criatura,
+ * indicación de interacción, subtítulos de sonido, ayuda de dirección, viñeta direccional,
+ * vista por rendijas al estar escondido, fundido a negro y overlay de depuración.
+ * Todo lleva texto además de color. Solo actualiza el DOM cuando cambia lo que muestra.
  */
+import { NOISE } from '../data/balance';
 import { TEXTS } from '../data/texts';
+import type { NoiseLevel } from '../game/noise';
 import { el } from '../ui/dom';
 
 export interface DebugInfo {
@@ -25,7 +28,11 @@ export interface DebugInfo {
   geometries: number;
   textures: number;
   cachedChunks: number;
+  /** Una línea por criatura: estado, distancia y si ve al jugador. */
+  creatures: string[];
 }
+
+const NOISE_BARS = 5;
 
 interface Subtitle {
   node: HTMLElement;
@@ -46,8 +53,26 @@ export class Hud {
   private readonly prompt: HTMLElement;
   private readonly direction: HTMLElement;
   private readonly subtitles: HTMLElement;
+  private readonly noise: HTMLElement;
+  private readonly noiseBars: HTMLElement[] = [];
+  private readonly noiseText: HTMLElement;
+  private readonly threat: HTMLElement;
+  private readonly vignette: HTMLElement;
+  private readonly slits: HTMLElement;
+  private readonly fade: HTMLElement;
   private readonly active: Subtitle[] = [];
-  private last = { stamina: -1, exhausted: false, fuses: '', prompt: '', direction: '' };
+  private last = {
+    stamina: -1,
+    exhausted: false,
+    fuses: '',
+    prompt: '',
+    direction: '',
+    noise: '',
+    threat: '',
+    vignette: '',
+    hidden: false,
+    fade: -1,
+  };
 
   constructor(container: HTMLElement, debugEnabled: boolean) {
     this.layer = el('div', { className: 'hud', attrs: { 'aria-hidden': 'false' } });
@@ -65,10 +90,34 @@ export class Hud {
       className: 'subtitles',
       attrs: { role: 'log', 'aria-live': 'polite' },
     });
-    for (const n of [this.crosshair, this.stamina, this.fuses, this.prompt, this.direction])
+    for (let i = 0; i < NOISE_BARS; i++)
+      this.noiseBars.push(el('span', { className: 'noise-bar' }));
+    this.noiseText = el('span', { className: 'bar-text' });
+    this.noise = el('div', { className: 'noise' }, [
+      el('span', { className: 'noise-bars', attrs: { 'aria-hidden': 'true' } }, this.noiseBars),
+      this.noiseText,
+    ]);
+    this.threat = el('div', { className: 'threat', attrs: { role: 'status' } });
+    this.vignette = el('div', { className: 'vignette', attrs: { 'aria-hidden': 'true' } });
+    this.slits = el('div', { className: 'hide-slits' }, [
+      el('span', { className: 'hide-label', text: TEXTS.hud.hidden }),
+    ]);
+    this.slits.hidden = true;
+    for (const n of [
+      this.crosshair,
+      this.stamina,
+      this.fuses,
+      this.prompt,
+      this.direction,
+      this.threat,
+    ])
       n.hidden = true;
     this.layer.append(
+      this.vignette,
+      this.slits,
       this.crosshair,
+      this.noise,
+      this.threat,
       this.stamina,
       this.fuses,
       this.prompt,
@@ -77,6 +126,10 @@ export class Hud {
     );
     this.layer.hidden = true;
     container.appendChild(this.layer);
+    // El fundido va fuera del HUD: sigue visible al pasar a la pantalla de derrota.
+    this.fade = el('div', { className: 'fade', attrs: { 'aria-hidden': 'true' } });
+    this.fade.style.opacity = '0';
+    container.appendChild(this.fade);
     this.debug = debugEnabled
       ? el('pre', { className: 'debug', attrs: { 'aria-hidden': 'true' } })
       : null;
@@ -112,6 +165,66 @@ export class Hud {
     this.last.fuses = text;
     this.fuses.textContent = text;
     this.fuses.hidden = text === '';
+  }
+
+  /** Ruido del jugador: barras según el alcance y el nivel en texto. */
+  setNoise(level: NoiseLevel, radius: number): void {
+    const bars = radius <= 0 ? 0 : Math.max(1, Math.ceil((radius / NOISE.radius.run) * NOISE_BARS));
+    const key = `${level}:${bars}`;
+    if (key === this.last.noise) return;
+    this.last.noise = key;
+    this.noiseBars.forEach((b, i) => b.classList.toggle('on', i < bars));
+    this.noise.classList.toggle('high', level === 'high');
+    this.noiseText.textContent = `${TEXTS.hud.noise}: ${TEXTS.hud.noiseLevels[level]}`;
+  }
+
+  /** Cercanía de la criatura (texto con flecha); cadena vacía lo oculta. */
+  setThreat(text: string, veryNear: boolean): void {
+    const key = `${text}|${veryNear}`;
+    if (key === this.last.threat) return;
+    this.last.threat = key;
+    this.threat.textContent = text;
+    this.threat.hidden = text === '';
+    this.threat.classList.toggle('very-near', veryNear);
+  }
+
+  /**
+   * Viñeta direccional: oscurece el borde de la pantalla del lado de la criatura.
+   * `angle` es relativo a la mirada (0 delante, positivo a la izquierda); `strength` 0..1.
+   * Los valores se redondean a pasos de 0,05 para no tocar el estilo en cada frame.
+   */
+  setVignette(strength: number, angle: number): void {
+    const q = (v: number): string => (Math.round(Math.max(0, v) * 20) / 20).toFixed(2);
+    const s = Math.max(0, Math.min(1, strength));
+    const front = q(Math.cos(angle) * s);
+    const back = q(-Math.cos(angle) * s);
+    const left = q(Math.sin(angle) * s);
+    const right = q(-Math.sin(angle) * s);
+    const base = q(s * 0.5);
+    const key = `${front},${back},${left},${right},${base}`;
+    if (key === this.last.vignette) return;
+    this.last.vignette = key;
+    const st = this.vignette.style;
+    st.setProperty('--vf', front);
+    st.setProperty('--vb', back);
+    st.setProperty('--vl', left);
+    st.setProperty('--vr', right);
+    st.setProperty('--v', base);
+  }
+
+  /** Vista por rendijas dentro de un escondite. */
+  setHidden(hidden: boolean): void {
+    if (hidden === this.last.hidden) return;
+    this.last.hidden = hidden;
+    this.slits.hidden = !hidden;
+  }
+
+  /** Fundido a negro (0 = nada, 1 = negro). */
+  setFade(alpha: number): void {
+    const a = Math.round(Math.max(0, Math.min(1, alpha)) * 100) / 100;
+    if (a === this.last.fade) return;
+    this.last.fade = a;
+    this.fade.style.opacity = String(a);
   }
 
   setPrompt(text: string): void {
@@ -157,6 +270,10 @@ export class Hud {
     this.active.length = 0;
     this.setPrompt('');
     this.setDirection('');
+    this.setThreat('', false);
+    this.setVignette(0, 0);
+    this.setHidden(false);
+    this.setNoise('silent', 0);
   }
 
   get debugEnabled(): boolean {
@@ -174,6 +291,7 @@ export class Hud {
       `Luces reales ${info.lights}`,
       `Draw calls ${info.calls}`,
       `Geometrías ${info.geometries} · Texturas ${info.textures}`,
+      ...info.creatures,
     ].join('\n');
   }
 }

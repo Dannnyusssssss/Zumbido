@@ -22,6 +22,13 @@ export interface RoomRect {
   readonly large: boolean;
 }
 
+/** Escondite contra una pared: celda local y lado de la pared (0 oeste, 1 este, 2 norte, 3 sur). */
+export interface HideCell {
+  readonly x: number;
+  readonly z: number;
+  readonly side: 0 | 1 | 2 | 3;
+}
+
 export interface ChunkData {
   readonly cx: number;
   readonly cz: number;
@@ -30,6 +37,7 @@ export interface ChunkData {
   readonly columns: Uint8Array;
   readonly panels: Uint8Array;
   readonly rooms: readonly RoomRect[];
+  readonly hides: readonly HideCell[];
 }
 
 /** Sala de inicio fija del chunk (0, 0), en celdas locales. */
@@ -45,6 +53,7 @@ const BORDER_V = 0xb0;
 const BORDER_H = 0xb1;
 const CHUNK_CHANNEL = 0xc1;
 const PANEL_CHANNEL = 0xd1;
+const HIDE_CHANNEL = 0xe1;
 
 export const vIndex = (x: number, z: number): number => z * (N + 1) + x;
 export const hIndex = (x: number, z: number): number => z * N + x;
@@ -277,6 +286,40 @@ function placePanels(chunk: ChunkData, seed: number, level: LevelDef): void {
   }
 }
 
+/**
+ * Escondites: dentro de las salas, contra una pared normal (nunca un estante ni un borde abierto),
+ * en celdas sin columna y con al menos dos salidas, uno por celda como máximo. Usan su propio
+ * generador (canal aparte), así no cambian las paredes ni las salas que ya daba cada semilla.
+ */
+function placeHides(chunk: ChunkData, seed: number, level: LevelDef): void {
+  const range = level.gen.hides;
+  if (range.max <= 0) return;
+  const rng = new Rng(hash3(seed ^ level.salt, chunk.cx, chunk.cz, HIDE_CHANNEL));
+  const count = rng.int(range.min, range.max);
+  const candidates: HideCell[] = [];
+  for (const room of chunk.rooms) {
+    for (let z = room.z; z < room.z + room.h; z++) {
+      for (let x = room.x; x < room.x + room.w; x++) {
+        if (chunk.columns[cellIndex(x, z)] === 1 || cellDegree(chunk, x, z) < 2) continue;
+        if (chunk.vWalls[vIndex(x, z)] === EDGE.wall) candidates.push({ x, z, side: 0 });
+        if (chunk.vWalls[vIndex(x + 1, z)] === EDGE.wall) candidates.push({ x, z, side: 1 });
+        if (chunk.hWalls[hIndex(x, z)] === EDGE.wall) candidates.push({ x, z, side: 2 });
+        if (chunk.hWalls[hIndex(x, z + 1)] === EDGE.wall) candidates.push({ x, z, side: 3 });
+      }
+    }
+  }
+  rng.shuffle(candidates);
+  const used = new Set<number>();
+  const hides = chunk.hides as HideCell[];
+  for (const c of candidates) {
+    if (hides.length >= count) break;
+    const cell = cellIndex(c.x, c.z);
+    if (used.has(cell)) continue;
+    used.add(cell);
+    hides.push(c);
+  }
+}
+
 /** Genera el chunk (cx, cz) del nivel con la semilla dada. */
 export function generateChunk(seed: number, level: LevelDef, cx: number, cz: number): ChunkData {
   const g = level.gen;
@@ -288,6 +331,7 @@ export function generateChunk(seed: number, level: LevelDef, cx: number, cz: num
     columns: new Uint8Array(N * N),
     panels: new Uint8Array(N * N),
     rooms: [],
+    hides: [],
   };
 
   // 1. Bordes: aberturas decididas por el hash del borde compartido con cada vecino.
@@ -339,6 +383,9 @@ export function generateChunk(seed: number, level: LevelDef, cx: number, cz: num
 
   // 6. Paneles de luz del techo.
   placePanels(chunk, seed, level);
+
+  // 7. Escondites (generador propio: no altera nada de lo anterior).
+  placeHides(chunk, seed, level);
   return chunk;
 }
 

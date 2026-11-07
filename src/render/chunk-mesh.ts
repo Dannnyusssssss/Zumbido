@@ -15,9 +15,10 @@ import {
   Mesh,
   type Material,
 } from 'three';
-import { EDGE, WORLD } from '../data/balance';
+import { EDGE, HIDING, WORLD } from '../data/balance';
 import type { LevelDef } from '../data/levels';
 import { flickerParams, isFlickering, type FlickerParams } from '../game/flicker';
+import { hideSpotOf } from '../game/hiding';
 import { cellIndex, hIndex, N, vIndex, type ChunkData } from '../game/worldgen';
 
 const CS = WORLD.cellSize;
@@ -33,12 +34,16 @@ export interface ChunkMaterials {
   wall: Material;
   shelf: Material;
   panel: Material;
+  /** Taquillas y armarios (escondites). */
+  hide: Material;
 }
 
 export interface ChunkView {
   readonly key: number;
   readonly mesh: Mesh;
   readonly panels: InstancedMesh | null;
+  /** Escondites del chunk (o null si no tiene). */
+  readonly hides: InstancedMesh | null;
   /** Posiciones de los paneles en metros globales (para el pool de luces reales). */
   readonly panelX: Float32Array;
   readonly panelZ: Float32Array;
@@ -156,6 +161,7 @@ function drawsLine(line: number, chunkCoord: number): boolean {
 }
 
 const tmpMatrix = new Matrix4();
+const tmpRotation = new Matrix4();
 const tmpColor = new Color(1, 1, 1);
 
 export function buildChunkView(
@@ -165,6 +171,7 @@ export function buildChunkView(
   materials: ChunkMaterials,
   panelGeometry: BufferGeometry,
   seed: number,
+  hideGeometry: BufferGeometry,
 ): ChunkView {
   const H = level.ceilingHeight;
 
@@ -304,10 +311,28 @@ export function buildChunkView(
     panels.computeBoundingSphere();
   }
 
+  // 5. Escondites: una caja instanciada por cada uno, apoyada en su pared y mirando hacia fuera.
+  let hides: InstancedMesh | null = null;
+  if (chunk.hides.length > 0) {
+    hides = new InstancedMesh(hideGeometry, materials.hide, chunk.hides.length);
+    chunk.hides.forEach((h, i) => {
+      const spot = hideSpotOf(chunk.cx, chunk.cz, h);
+      // La geometría tiene el frente hacia +z: se gira hacia la normal del escondite.
+      tmpRotation.makeRotationY(Math.atan2(spot.nx, spot.nz));
+      tmpMatrix.makeTranslation(spot.x - ox, HIDING.height / 2, spot.z - oz).multiply(tmpRotation);
+      hides?.setMatrixAt(i, tmpMatrix);
+    });
+    hides.position.set(ox, 0, oz);
+    hides.matrixAutoUpdate = false;
+    hides.updateMatrix();
+    hides.computeBoundingSphere();
+  }
+
   return {
     key,
     mesh,
     panels,
+    hides,
     panelX,
     panelZ,
     panelFlicker,
@@ -320,4 +345,5 @@ export function buildChunkView(
 export function disposeChunkView(view: ChunkView): void {
   view.mesh.geometry.dispose();
   view.panels?.dispose();
+  view.hides?.dispose();
 }
