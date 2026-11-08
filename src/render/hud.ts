@@ -7,6 +7,7 @@
 import { NOISE } from '../data/balance';
 import { TEXTS } from '../data/texts';
 import type { NoiseLevel } from '../game/noise';
+import { formatTime } from '../game/progress';
 import { el } from '../ui/dom';
 
 export interface DebugInfo {
@@ -24,6 +25,8 @@ export interface DebugInfo {
   buildMs: number;
   peakBuildMs: number;
   lights: number;
+  /** Escala de la resolución interna (resolución dinámica). */
+  scale: number;
   calls: number;
   geometries: number;
   textures: number;
@@ -50,6 +53,8 @@ export class Hud {
   private readonly staminaFill: HTMLElement;
   private readonly staminaText: HTMLElement;
   private readonly fuses: HTMLElement;
+  /** Última distancia y tiempo mostrados en Deriva (evita rehacer el texto en cada frame). */
+  private lastDriftKey = Number.NaN;
   private readonly prompt: HTMLElement;
   private readonly direction: HTMLElement;
   private readonly subtitles: HTMLElement;
@@ -159,7 +164,22 @@ export class Hud {
       : `${TEXTS.hud.stamina} ${pct} %`;
   }
 
+  /** Modo Deriva: distancia explorada y tiempo sobrevivido (en el sitio de los fusibles). */
+  setDriftStats(meters: number, seconds: number): void {
+    // Solo se rehace el texto cuando cambia lo que se ve (metro entero o décima de segundo).
+    const key = Math.floor(meters) * 1e7 + Math.floor(seconds * 10);
+    if (key === this.lastDriftKey) return;
+    this.lastDriftKey = key;
+    const h = TEXTS.hud;
+    const text = `${h.distance} ${Math.floor(meters)} m · ${h.survived} ${formatTime(seconds)}`;
+    if (text === this.last.fuses) return;
+    this.last.fuses = text;
+    this.fuses.textContent = text;
+    this.fuses.hidden = false;
+  }
+
   setFuses(collected: number, required: number): void {
+    this.lastDriftKey = Number.NaN;
     const text = required > 0 ? `${TEXTS.hud.fuses} ${collected}/${required}` : '';
     if (text === this.last.fuses) return;
     this.last.fuses = text;
@@ -288,7 +308,7 @@ export class Hud {
       `Posición ${info.x.toFixed(1)}, ${info.z.toFixed(1)} · Rumbo ${info.heading.toFixed(1)}° · Chunk ${info.cx}, ${info.cz}`,
       `Chunks cargados ${info.loaded} (cola ${info.queued}, caché ${info.cachedChunks})`,
       `Generación ${info.buildMs.toFixed(2)} ms (pico ${info.peakBuildMs.toFixed(2)} ms)`,
-      `Luces reales ${info.lights}`,
+      `Luces reales ${info.lights} · Escala de resolución ${info.scale.toFixed(2)}`,
       `Draw calls ${info.calls}`,
       `Geometrías ${info.geometries} · Texturas ${info.textures}`,
       ...info.creatures,

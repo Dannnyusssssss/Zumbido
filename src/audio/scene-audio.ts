@@ -48,10 +48,10 @@ export class SceneAudio {
     this.heart.update(closeness(d, THREAT.heartDistance), dt);
 
     this.exitTimer -= dt;
-    if (exitHum !== null && this.exitTimer <= 0) {
+    const exit = world.layout.exit;
+    if (exitHum !== null && exit !== null && this.exitTimer <= 0) {
       this.exitTimer = EXIT_OCCLUSION_SECONDS;
       const p = world.player;
-      const exit = world.layout.exit;
       exitHum.setOccluded(!lineOfSight(world.grid, p.x, p.z, exit.x, exit.z));
     }
   }

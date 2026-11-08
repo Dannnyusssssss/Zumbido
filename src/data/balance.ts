@@ -292,6 +292,31 @@ export const THREAT = {
   lightDimHz: 1.3,
 } as const;
 
+/** Modo Deriva: mundo sin fin por zonas, puntuación y atención creciente de la criatura. */
+export const DRIFT = {
+  /** Lado de una zona en chunks (cada zona es de un solo nivel). */
+  regionChunks: 4,
+  /** Puntos por cada metro de terreno nuevo explorado (cada celda nueva cuenta su lado). */
+  pointsPerMeter: 1,
+  /** Puntos por cada segundo sobrevivido. */
+  pointsPerSecond: 2,
+  /** Segundos hasta que la atención de la criatura llega a su tope. */
+  attentionRampSeconds: 600,
+  /** Multiplicadores del oído y la vista con la atención al tope (sobre la dificultad elegida). */
+  maxHearingBoost: 1.4,
+  maxSightBoost: 1.2,
+  /** Tendencia a vagar cerca del jugador: se suma hasta este extra, sin pasar del tope. */
+  wanderBiasBoost: 0.3,
+  wanderBiasCap: 0.9,
+  /** Con la atención al tope, los tiempos de reaparición se multiplican por este factor. */
+  minRespawnFactor: 0.5,
+  /** Criaturas en total y segundos de partida hasta que la segunda puede aparecer. */
+  creatures: 2,
+  secondCreatureSeconds: 300,
+  /** Segundos que tarda el ambiente (niebla, luz, eco) en pasar al de una zona nueva. */
+  ambienceBlendSeconds: 2,
+} as const;
+
 /** Volúmenes de la criatura y del latido (antes del limitador). */
 export const CREATURE_SOUND = {
   steps: 0.5,

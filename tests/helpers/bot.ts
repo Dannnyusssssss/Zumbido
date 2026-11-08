@@ -113,7 +113,9 @@ export function playLevel(
         best = f;
       }
     }
-    return best ?? world.layout.exit;
+    const exit = world.layout.exit;
+    if (best === null && exit === null) throw new Error('El nivel no tiene salida');
+    return best ?? (exit as PlacedObject);
   };
 
   let target = nextTarget();

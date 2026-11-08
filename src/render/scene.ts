@@ -43,11 +43,14 @@ export function createRenderContext(container: HTMLElement, level: LevelDef): Re
   return { renderer, scene, camera, ambient, fog };
 }
 
-/** Aplica tamaño de ventana y tope de devicePixelRatio. */
-export function resizeRenderer(ctx: RenderContext, preset: QualityPreset): void {
+/**
+ * Aplica tamaño de ventana y tope de devicePixelRatio. `scale` (resolución dinámica) reduce la
+ * resolución interna sin cambiar el tamaño en pantalla.
+ */
+export function resizeRenderer(ctx: RenderContext, preset: QualityPreset, scale = 1): void {
   const w = Math.max(1, window.innerWidth);
   const h = Math.max(1, window.innerHeight);
-  const dpr = Math.min(window.devicePixelRatio || 1, preset.maxPixelRatio);
+  const dpr = Math.min(window.devicePixelRatio || 1, preset.maxPixelRatio) * scale;
   ctx.renderer.setPixelRatio(dpr);
   ctx.renderer.setSize(w, h, true);
   ctx.camera.aspect = w / h;
@@ -60,13 +63,4 @@ export function applyFog(ctx: RenderContext, preset: QualityPreset, scale = 1): 
   ctx.fog.far = preset.fogFar * scale;
   ctx.camera.far = ctx.fog.far + 10;
   ctx.camera.updateProjectionMatrix();
-}
-
-/** Colores de fondo, niebla y luz ambiente del nivel. */
-export function applyLevelLook(ctx: RenderContext, level: LevelDef): void {
-  const fogColor = new Color(level.palette.fog);
-  ctx.scene.background = fogColor;
-  ctx.fog.color.copy(fogColor);
-  ctx.ambient.color.set(level.palette.ambient);
-  ctx.ambient.intensity = level.lighting.ambientIntensity;
 }

@@ -15,7 +15,8 @@ type BoolKey =
   | 'invertY'
   | 'crosshair'
   | 'subtitles'
-  | 'directionAid';
+  | 'directionAid'
+  | 'dynamicResolution';
 
 let idCounter = 0;
 const nextId = (prefix: string): string => `${prefix}-${++idCounter}`;
@@ -144,6 +145,7 @@ export class SettingsControls {
       this.slider('sensitivity', t.sensitivity, 0.05, (v) => v.toFixed(2)),
       this.slider('fov', t.fov, 1, (v) => `${Math.round(v)}°`),
       this.quality(),
+      this.checkbox('dynamicResolution', t.dynamicResolution),
       this.difficulty(),
     ]);
   }

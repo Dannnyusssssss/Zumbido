@@ -27,6 +27,7 @@ export const TEXTS = {
     settings: 'Ajustes',
     seed: 'Semilla',
     level: 'Nivel',
+    driftName: 'Deriva',
     time: 'Tiempo',
     retry: 'Reintentar nivel',
     menu: 'Menú principal',
@@ -46,16 +47,19 @@ export const TEXTS = {
     directionAid: 'Ayuda de dirección a la salida',
     difficulty: 'Dificultad',
     difficultyNames: { easy: 'Fácil', normal: 'Normal', hard: 'Difícil' },
+    dynamicResolution: 'Resolución dinámica (la baja si el juego va lento)',
     qualityLow: 'Baja',
     qualityMedium: 'Media',
     qualityHigh: 'Alta',
-    saveFailed: 'No se pudieron guardar los ajustes en este navegador.',
+    saveFailed:
+      'No se pudieron guardar los ajustes ni el progreso en este navegador (almacenamiento lleno o bloqueado). Puedes seguir jugando.',
   },
   notices: {
     pointerLockFailed:
       'No se pudo capturar el ratón. Puedes girar con las flechas o hacer clic de nuevo.',
     muted: 'Sonido silenciado',
     unmuted: 'Sonido activado',
+    resolutionLowered: 'Resolución reducida para mantener la fluidez.',
   },
   select: {
     title: 'Elegir partida',
@@ -68,6 +72,9 @@ export const TEXTS = {
     seedInvalid: 'Semilla no válida: usa solo letras A–Z y números (de 1 a 16).',
     modeTitle: 'Empezar',
     fullRun: 'Partida completa (niveles 1 a 3)',
+    drift: 'Deriva (sin fin)',
+    driftHint: 'Sin salida: llega tan lejos como puedas sin que te encuentre.',
+    bestDrift: 'Mejor deriva',
     singleTitle: 'Nivel suelto',
     locked: 'bloqueado',
     best: 'Mejor',
@@ -91,6 +98,8 @@ export const TEXTS = {
       kind === 'locker' ? 'E: esconderte en la taquilla' : 'E: esconderte en el armario',
     promptLeave: 'E: salir del escondite',
     hidden: 'Escondido',
+    distance: 'Distancia',
+    survived: 'Tiempo',
   },
   messages: {
     levelIntro: (id: number, name: string): string => `Nivel ${id}: ${name}`,
@@ -108,6 +117,7 @@ export const TEXTS = {
           : `Fusible recogido. Faltan ${n}.`,
     exitActivated: 'Todos los fusibles: la salida está activa.',
     seenHiding: 'Te ha visto entrar.',
+    driftIntro: 'Deriva: no hay salida. Explora sin que te encuentre; cuanto más lejos, mejor.',
   },
   subtitles: {
     directions: [
@@ -145,6 +155,14 @@ export const TEXTS = {
     playAgain: 'Jugar otra vez',
     defeatTitle: 'Te ha encontrado',
     defeatText: 'La Escucha te alcanzó. Puedes intentarlo otra vez con la misma semilla.',
+    driftTitle: 'Fin de la deriva',
+    driftText: 'La Escucha te alcanzó. Puedes empezar otra deriva con la misma semilla.',
+    distance: 'Distancia explorada',
+    survived: 'Tiempo sobrevivido',
+    score: 'Puntuación',
+    bestScore: 'Mejor deriva',
+    driftBestLine: (score: number, meters: number, time: string): string =>
+      `${score} puntos (${meters} m, ${time})`,
   },
   errors: {
     noWebGL:

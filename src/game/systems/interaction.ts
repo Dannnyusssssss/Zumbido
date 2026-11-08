@@ -107,7 +107,7 @@ export function interactionSystem(world: World, input: InputState): void {
       bestD = d;
     }
   };
-  consider(world.layout.exit);
+  if (world.layout.exit !== null) consider(world.layout.exit);
   for (const fuse of world.layout.fuses) if (!world.fuseTaken[fuse.index]) consider(fuse);
   // Gana lo más cercano: un escondite solo si está más cerca que el objeto.
   const hide = nearestHide(world, bestD);

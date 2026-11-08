@@ -28,6 +28,13 @@ class FakeGrid implements WallQuery {
 
 const hit = (): RayHit => ({ dist: 0, x: 0, z: 0, nx: 0, nz: 0 });
 
+/** Salida del nivel (en el modo Salida siempre existe). */
+function exitOf(world: World): { x: number; z: number } {
+  const exit = world.layout.exit;
+  if (exit === null) throw new Error('El nivel no tiene salida');
+  return exit;
+}
+
 describe('castRay', () => {
   it('choca con una pared y devuelve la superficie y la normal', () => {
     const g = new FakeGrid();
@@ -152,7 +159,7 @@ describe('interacción', () => {
     expect(world.exitActive).toBe(true);
     const input = new InputState();
     world.step(1 / 60, input);
-    standBefore(world, world.layout.exit);
+    standBefore(world, exitOf(world));
     input.keyDown('KeyE');
     world.step(1 / 60, input);
     expect(world.completed).toBe(true);
@@ -163,7 +170,7 @@ describe('interacción', () => {
     const world = new World('DEMO', getLevel(2));
     const input = new InputState();
     expect(world.exitActive).toBe(false);
-    standBefore(world, world.layout.exit);
+    standBefore(world, exitOf(world));
     input.keyDown('KeyE');
     world.step(1 / 60, input);
     input.keyUp('KeyE');
@@ -183,7 +190,7 @@ describe('interacción', () => {
     standBefore(world, world.layout.fuses[0] ?? world.layout.exit);
     world.step(1 / 60, input);
     expect(world.focus?.kind).not.toBe('fuse');
-    standBefore(world, world.layout.exit);
+    standBefore(world, exitOf(world));
     input.keyDown('KeyE');
     world.step(1 / 60, input);
     expect(world.completed).toBe(true);
@@ -192,7 +199,7 @@ describe('interacción', () => {
   it('el tiempo no avanza tras completar el nivel', () => {
     const world = new World('DEMO', getLevel(1));
     const input = new InputState();
-    standBefore(world, world.layout.exit);
+    standBefore(world, exitOf(world));
     input.keyDown('KeyE');
     world.step(1 / 60, input);
     const t = world.time;

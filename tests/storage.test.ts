@@ -115,6 +115,43 @@ describe('persistencia', () => {
     expect(s.lastSeed).toBeNull();
   });
 
+  // Guardados con el formato de cada hito anterior: deben seguir leyéndose sin perder lo válido.
+  it('lee los guardados de los hitos 1, 2 y 3 y completa lo que les falta', () => {
+    const hito1 = {
+      version: 1,
+      settings: { muted: true, reduceFlicker: true, sensitivity: 1.5, fov: 80, quality: 'low' },
+      lastSeed: 'demo',
+    };
+    const hito2 = {
+      ...hito1,
+      settings: { ...hito1.settings, subtitles: false, directionAid: true },
+      progress: { unlocked: 3, bestTimes: [61.2, 90, null], bestRun: null },
+    };
+    const hito3 = { ...hito2, settings: { ...hito2.settings, difficulty: 'hard' } };
+    for (const [raw, difficulty] of [
+      [hito1, 'normal'],
+      [hito2, 'normal'],
+      [hito3, 'hard'],
+    ] as const) {
+      const storage = new MemoryStorage();
+      storage.setItem(META.storageKey, JSON.stringify(raw));
+      const save = loadSave(storage, false);
+      // Lo que ya tenían se conserva.
+      expect(save.settings.muted).toBe(true);
+      expect(save.settings.sensitivity).toBe(1.5);
+      expect(save.settings.quality).toBe('low');
+      expect(save.lastSeed).toBe('DEMO');
+      expect(save.settings.difficulty).toBe(difficulty);
+      // Lo nuevo del Hito 4 toma su valor por defecto.
+      expect(save.settings.dynamicResolution).toBe(true);
+      expect(save.settings.renderScale).toBe(1);
+      expect(save.progress.drift).toBeNull();
+    }
+    const storage = new MemoryStorage();
+    storage.setItem(META.storageKey, JSON.stringify(hito2));
+    expect(loadSave(storage, false).progress.bestTimes).toEqual([61.2, 90, null]);
+  });
+
   it('rechaza guardados enormes', () => {
     const storage = new MemoryStorage();
     storage.setItem(META.storageKey, JSON.stringify({ x: 'A'.repeat(100000) }));

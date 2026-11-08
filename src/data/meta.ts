@@ -5,4 +5,7 @@ export const META = {
   storagePrefix: 'zumbido:',
   storageKey: 'zumbido:v1',
   lang: 'es',
+  /** Descripción corta (meta description del HTML). */
+  description:
+    'Terror en primera persona en un laberinto procedural de luces fluorescentes. Explora, escóndete y escapa sin hacer ruido.',
 } as const;

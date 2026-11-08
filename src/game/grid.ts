@@ -4,6 +4,7 @@
  */
 import { EDGE, WORLD } from '../data/balance';
 import type { LevelDef } from '../data/levels';
+import { constantLevelMap, type LevelMap } from './regions';
 import { cellIndex, generateChunk, hIndex, N, vIndex, type ChunkData } from './worldgen';
 
 const KEY_OFFSET = 4096;
@@ -47,12 +48,17 @@ export class ChunkStore {
   private lastKey = Number.NaN;
   private lastChunk: ChunkData | null = null;
   generatedCount = 0;
+  /** Nivel de cada chunk (en el modo Salida, siempre `level`). */
+  readonly levelAt: LevelMap;
 
   constructor(
     readonly seed: number,
     readonly level: LevelDef,
     readonly capacity: number = WORLD.chunkCacheSize,
-  ) {}
+    levelAt?: LevelMap,
+  ) {
+    this.levelAt = levelAt ?? constantLevelMap(level);
+  }
 
   get size(): number {
     return this.cache.size;
@@ -72,7 +78,7 @@ export class ChunkStore {
       this.cache.delete(key);
       this.cache.set(key, chunk);
     } else {
-      chunk = generateChunk(this.seed, this.level, cx, cz);
+      chunk = generateChunk(this.seed, this.levelAt(cx, cz), cx, cz, this.levelAt);
       this.generatedCount++;
       this.cache.set(key, chunk);
       if (this.cache.size > this.capacity) {

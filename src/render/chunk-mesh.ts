@@ -40,6 +40,8 @@ export interface ChunkMaterials {
 
 export interface ChunkView {
   readonly key: number;
+  /** Nivel con el que se dibujó el chunk (techo, paneles y luces). */
+  readonly level: LevelDef;
   readonly mesh: Mesh;
   readonly panels: InstancedMesh | null;
   /** Escondites del chunk (o null si no tiene). */
@@ -153,6 +155,22 @@ class QuadWriter {
       this.quad(x0, h, z1, x1, h, z1, x1, h, z0, x0, h, z0, 0, 1, 0, 0, 0, 0.05, 0.05);
     }
   }
+
+  /**
+   * Franja vertical de x0..x1, z0..z1 entre las alturas y0 e y1: cuatro caras y la de abajo.
+   * Se usa como faldón donde el techo de este chunk es más alto que el del vecino.
+   */
+  band(x0: number, x1: number, z0: number, z1: number, y0: number, y1: number): void {
+    const W = WALL_TILE;
+    // La textura de pared cubre de 0 a la altura total: la franja usa solo su parte alta.
+    const v0 = y0 / y1;
+    const v1 = 1;
+    this.quad(x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, -1, 0, 0, z0 / W, v0, z1 / W, v1);
+    this.quad(x1, y0, z1, x1, y0, z0, x1, y1, z0, x1, y1, z1, 1, 0, 0, -z1 / W, v0, -z0 / W, v1);
+    this.quad(x1, y0, z0, x0, y0, z0, x0, y1, z0, x1, y1, z0, 0, 0, -1, -x1 / W, v0, -x0 / W, v1);
+    this.quad(x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, 0, 0, 1, x0 / W, v0, x1 / W, v1);
+    this.quad(x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0, 0, 0, 0.05, 0.05);
+  }
 }
 
 /** ¿Se dibuja la línea `line` (0..N) del borde? El borde lejano lo dibuja el vecino, salvo en el límite del mundo. */
@@ -172,8 +190,15 @@ export function buildChunkView(
   panelGeometry: BufferGeometry,
   seed: number,
   hideGeometry: BufferGeometry,
+  neighborHeights: readonly number[] = [],
 ): ChunkView {
   const H = level.ceilingHeight;
+  // Faldones: en cada lado (oeste, este, norte, sur) cuyo vecino tiene el techo más bajo.
+  const bands: number[] = [];
+  for (let side = 0; side < 4; side++) {
+    const nh = neighborHeights[side] ?? H;
+    if (nh < H) bands.push(side, nh);
+  }
 
   // 1. Contar quads para reservar memoria exacta.
   let walls = 0;
@@ -188,7 +213,7 @@ export function buildChunkView(
   let shelves = 0;
   for (const v of chunk.vWalls) if (v === EDGE.shelf) shelves++;
   for (const v of chunk.hWalls) if (v === EDGE.shelf) shelves++;
-  const w = new QuadWriter(2 + (walls + columns) * 4 + shelves * 5);
+  const w = new QuadWriter(2 + (walls + columns) * 4 + shelves * 5 + (bands.length / 2) * 5);
 
   // 2. Suelo y techo: un quad cada uno; una repetición de textura por celda.
   w.quad(0, 0, SIZE, SIZE, 0, SIZE, SIZE, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, N, N);
@@ -216,6 +241,18 @@ export function buildChunkView(
       const cz = (z + 0.5) * CS;
       w.box(cx - COL, cx + COL, cz - COL, cz + COL, H);
     }
+  }
+
+  // Faldones en el borde, del techo del vecino al propio, para que no quede un hueco entre techos.
+  // Algo más finos que una pared para no coincidir con sus caras si ya hay pared en esa línea.
+  const BT = T * 0.9;
+  for (let b = 0; b < bands.length; b += 2) {
+    const side = bands[b] as number;
+    const low = bands[b + 1] as number;
+    if (side === 0) w.band(-BT, BT, -BT, SIZE + BT, low, H);
+    else if (side === 1) w.band(SIZE - BT, SIZE + BT, -BT, SIZE + BT, low, H);
+    else if (side === 2) w.band(-BT, SIZE + BT, -BT, BT, low, H);
+    else w.band(-BT, SIZE + BT, SIZE - BT, SIZE + BT, low, H);
   }
 
   const wallsEnd = w.indexCount;
@@ -330,6 +367,7 @@ export function buildChunkView(
 
   return {
     key,
+    level,
     mesh,
     panels,
     hides,

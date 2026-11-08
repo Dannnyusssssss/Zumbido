@@ -116,6 +116,8 @@ describe('progreso', () => {
       unlocked: 2,
       bestTimes: [42.5, null, null],
       bestRun: 100,
+      // Sin marca de Deriva en un guardado que no la tiene.
+      drift: null,
     });
   });
   it('formatea tiempos', () => {

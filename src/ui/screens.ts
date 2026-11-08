@@ -7,7 +7,7 @@ import { normalizeSeed } from '../core/params';
 import { LEVELS } from '../data/levels';
 import { META } from '../data/meta';
 import { TEXTS } from '../data/texts';
-import { formatTime, type Progress } from '../game/progress';
+import { formatTime, type DriftBest, type Progress } from '../game/progress';
 import type { RunMode } from '../game/run';
 import { button, el, show } from './dom';
 import type { SettingsControls } from './settings-panel';
@@ -45,10 +45,25 @@ export interface LevelEndInfo {
   next: string | null;
 }
 
+/** Resultado de una deriva para la pantalla final. */
+export interface DriftEndInfo {
+  meters: number;
+  time: number;
+  score: number;
+  newBest: boolean;
+  best: DriftBest | null;
+}
+
 export interface VictoryInfo {
   total: number;
   best: number | null;
   newBest: boolean;
+}
+
+/** Texto de una mejor deriva ("sin marca" si no hay). */
+function driftLine(best: DriftBest | null): string {
+  if (best === null) return TEXTS.select.noTime;
+  return TEXTS.results.driftBestLine(best.score, Math.floor(best.meters), formatTime(best.time));
 }
 
 export class Screens {
@@ -67,6 +82,10 @@ export class Screens {
   private readonly levelList: HTMLElement;
   private readonly bestRunText: HTMLElement;
   private readonly fullRunButton: HTMLButtonElement;
+  private readonly bestDriftText: HTMLElement;
+  private readonly defeatTitle: HTMLElement;
+  private readonly defeatText: HTMLElement;
+  private readonly defeatStats: HTMLElement;
   // Resultados.
   private readonly endTitle: HTMLElement;
   private readonly endStats: HTMLElement;
@@ -159,6 +178,7 @@ export class Screens {
     this.levelList = el('div', { className: 'level-list' });
     this.bestRunText = el('p', { className: 'small' });
     this.fullRunButton = button(s.fullRun, () => this.startFrom('full', 1), 'btn btn-primary');
+    this.bestDriftText = el('p', { className: 'small' });
     this.add(
       'select',
       el('section', { className: 'panel', attrs: { 'aria-labelledby': 'title-select' } }, [
@@ -179,6 +199,9 @@ export class Screens {
         el('h2', { text: s.modeTitle }),
         el('div', { className: 'actions' }, [this.fullRunButton]),
         this.bestRunText,
+        el('div', { className: 'actions' }, [button(s.drift, () => this.startFrom('drift', 1))]),
+        el('p', { className: 'small', text: s.driftHint }),
+        this.bestDriftText,
         el('h2', { text: s.singleTitle }),
         this.levelList,
         el('div', { className: 'actions' }, [button(s.back, () => this.showStart())]),
@@ -250,13 +273,17 @@ export class Screens {
       ]),
     );
 
-    // Derrota: la criatura te alcanzó. Solo acciones internas.
+    // Derrota: la criatura te alcanzó (en Deriva, con el resultado). Solo acciones internas.
     this.defeatRetry = button(r.retry, () => actions.retry(), 'btn btn-primary');
+    this.defeatTitle = el('h1', { text: r.defeatTitle, attrs: { id: 'title-defeat' } });
+    this.defeatText = el('p', { className: 'subtitle', text: r.defeatText });
+    this.defeatStats = el('div', { className: 'stats' });
     this.add(
       'defeat',
       el('section', { className: 'panel', attrs: { 'aria-labelledby': 'title-defeat' } }, [
-        el('h1', { text: r.defeatTitle, attrs: { id: 'title-defeat' } }),
-        el('p', { className: 'subtitle', text: r.defeatText }),
+        this.defeatTitle,
+        this.defeatText,
+        this.defeatStats,
         el('div', { className: 'actions' }, [
           this.defeatRetry,
           button(r.menu, () => actions.menu()),
@@ -320,6 +347,7 @@ export class Screens {
       }),
     );
     this.bestRunText.textContent = `${s.bestRun}: ${progress.bestRun === null ? s.noTime : formatTime(progress.bestRun)}`;
+    this.bestDriftText.textContent = `${s.bestDrift}: ${driftLine(progress.drift)}`;
     this.seedError.textContent = '';
     this.showPanel('select');
     this.fullRunButton.focus();
@@ -408,7 +436,21 @@ export class Screens {
     this.victoryAgain.focus();
   }
 
-  showDefeat(): void {
+  /** Derrota; con `drift`, el resultado de la deriva (distancia, tiempo, puntuación y mejor marca). */
+  showDefeat(drift: DriftEndInfo | null = null): void {
+    const r = TEXTS.results;
+    this.defeatTitle.textContent = drift === null ? r.defeatTitle : r.driftTitle;
+    this.defeatText.textContent = drift === null ? r.defeatText : r.driftText;
+    if (drift === null) {
+      this.defeatStats.replaceChildren();
+    } else {
+      this.defeatStats.replaceChildren(
+        el('p', { text: `${r.distance}: ${Math.floor(drift.meters)} m` }),
+        el('p', { text: `${r.survived}: ${formatTime(drift.time)}` }),
+        el('p', { text: `${r.score}: ${drift.score}${drift.newBest ? ` · ${r.newBest}` : ''}` }),
+        el('p', { className: 'small', text: `${r.bestScore}: ${driftLine(drift.best)}` }),
+      );
+    }
     this.showPanel('defeat');
     this.defeatRetry.focus();
   }

@@ -10,18 +10,19 @@ import { SceneAudio } from './audio/scene-audio';
 import { Sfx } from './audio/sfx';
 import { InputState } from './core/input';
 import { FixedStepLoop } from './core/loop';
+import { DynamicResolution } from './core/dynamic-res';
 import { parseDebugParams, seedFromBytes } from './core/params';
 import { dailySeed } from './core/seeds';
 import { HIDING, OBJECTS } from './data/balance';
 import type { Action } from './data/controls';
-import { getLevel } from './data/levels';
+import { getLevel, LEVELS } from './data/levels';
 import { META } from './data/meta';
 import { QUALITY_PRESETS } from './data/quality';
 import { TEXTS } from './data/texts';
 import { relativeAngle, SECTOR_ARROWS, sectorOf } from './game/cues';
 import { chunkOf } from './game/grid';
 import { applyLook } from './game/player';
-import { recordLevel, recordRun } from './game/progress';
+import { recordDrift, recordLevel, recordRun } from './game/progress';
 import {
   advanceRun,
   completeLevel,
@@ -35,13 +36,8 @@ import { CameraRig } from './render/camera-rig';
 import { EnemyView } from './render/enemy-mesh';
 import { Hud } from './render/hud';
 import { ObjectsView } from './render/objects';
-import {
-  applyFog,
-  applyLevelLook,
-  createRenderContext,
-  resizeRenderer,
-  type RenderContext,
-} from './render/scene';
+import { AmbienceBlend } from './render/ambience';
+import { createRenderContext, resizeRenderer, type RenderContext } from './render/scene';
 import { WorldView } from './render/world-view';
 import {
   loadSave,
@@ -99,6 +95,8 @@ function todaySeed(): string {
 
 class Game {
   private state: State = 'loading';
+  /** Estado antes de perder el contexto gráfico (para volver al recuperarlo). */
+  private stateBeforeLoss: State = 'start';
   private readonly storage = getStorage();
   private readonly save: SaveData;
   private readonly params = parseDebugParams(window.location.search);
@@ -114,6 +112,12 @@ class Game {
   private readonly events: GameEvent[] = [];
   private world: World | null = null;
   private ctx: RenderContext | null = null;
+  /** Niebla, fondo y luz ambiente del nivel (con transición suave entre zonas en Deriva). */
+  private ambience: AmbienceBlend | null = null;
+  /** Nivel cuyo ambiente (niebla, luz, eco) está puesto; en Deriva cambia al cruzar de zona. */
+  private ambienceLevelId = 0;
+  /** Resolución dinámica (la escala se guarda en los ajustes). */
+  private readonly dynRes: DynamicResolution;
   private view: WorldView | null = null;
   private objects: ObjectsView | null = null;
   private exitHum: ExitHum | null = null;
@@ -136,6 +140,9 @@ class Game {
   constructor(private readonly app: HTMLElement) {
     document.title = META.title;
     this.save = loadSave(this.storage, prefersReducedMotion());
+    this.dynRes = new DynamicResolution(
+      this.save.settings.dynamicResolution ? this.save.settings.renderScale : 1,
+    );
     this.controls = new SettingsControls(
       () => this.save.settings,
       (patch) => this.changeSettings(patch),
@@ -166,6 +173,7 @@ class Game {
       return;
     }
     this.ctx = ctx;
+    this.ambience = new AmbienceBlend(ctx);
     this.loadLevel(1, this.params.seed ?? randomSeed());
 
     this.binding = new InputBinding(ctx.renderer.domElement, this.input, {
@@ -184,18 +192,17 @@ class Game {
     const canvas = ctx.renderer.domElement;
     canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
+      // Se recuerda dónde estaba el jugador para volver allí al recuperar el contexto.
+      if (this.state !== 'error') this.stateBeforeLoss = this.state;
       this.pause();
       this.state = 'error';
       this.screens.showError(TEXTS.errors.contextLost);
     });
-    canvas.addEventListener('webglcontextrestored', () => {
-      // Three.js vuelve a subir geometrías y texturas por su cuenta; se reanuda en pausa.
-      this.state = 'paused';
-      this.showPause();
-    });
+    canvas.addEventListener('webglcontextrestored', () => this.onContextRestored());
     window.addEventListener('resize', () => {
-      if (this.ctx !== null) resizeRenderer(this.ctx, QUALITY_PRESETS[this.settings.quality]);
+      this.resize();
     });
+    this.watchPixelRatio();
 
     this.state = 'start';
     this.screens.showStart();
@@ -203,8 +210,8 @@ class Game {
     requestAnimationFrame(this.frame);
   }
 
-  /** Crea el mundo de un nivel y su vista, liberando los del nivel anterior. */
-  private loadLevel(levelId: number, seed: string): void {
+  /** Crea el mundo de un nivel (o de una deriva) y su vista, liberando los del anterior. */
+  private loadLevel(levelId: number, seed: string, drift = false): void {
     const ctx = this.ctx;
     if (ctx === null) return;
     this.view?.dispose();
@@ -216,10 +223,13 @@ class Game {
     const world = new World(seed, level, {
       difficulty: this.settings.difficulty,
       creatures: this.params.creatures,
+      drift,
     });
     this.world = world;
-    applyLevelLook(ctx, level);
-    this.view = new WorldView(ctx, world.store, level, world.seed);
+    this.ambience?.jump(level);
+    this.ambienceLevelId = level.id;
+    // En Deriva pueden aparecer los tres niveles; en Salida, solo el de la partida.
+    this.view = new WorldView(ctx, world.store, drift ? LEVELS : [level], world.seed);
     this.objects = new ObjectsView(ctx.scene, world);
     this.enemyView = new EnemyView(ctx.scene, world.enemies.length);
     this.sceneAudio.setWorld(world);
@@ -230,8 +240,9 @@ class Game {
     this.rig = new CameraRig(ctx.camera);
     this.applyQuality();
     this.view.warmUp(world.player.x, world.player.z, 9);
-    this.exitHum = new ExitHum(this.audio, world.layout.exit.x, world.layout.exit.z);
-    this.exitHum.setActive(world.exitActive);
+    const exit = world.layout.exit;
+    this.exitHum = exit === null ? null : new ExitHum(this.audio, exit.x, exit.z);
+    this.exitHum?.setActive(world.exitActive);
     this.audio.whenReady((e) => e.setReverb(level.audio.reverb, level.audio.reverbSeconds));
     this.lastExitCue = -Infinity;
     this.hud.clearTransient();
@@ -254,7 +265,12 @@ class Game {
     const next: Settings = { ...before, ...patch };
     this.save.settings = next;
     if (next.muted !== before.muted) this.audio.setMuted(next.muted);
-    if (next.quality !== before.quality) this.applyQuality();
+    // Cambiar la calidad o la resolución dinámica vuelve a la resolución completa.
+    if (next.quality !== before.quality || next.dynamicResolution !== before.dynamicResolution) {
+      this.dynRes.restore();
+      next.renderScale = this.dynRes.scale;
+      this.applyQuality();
+    }
     this.hud.setCrosshair(next.crosshair);
     if (!next.directionAid) this.hud.setDirection('');
     this.controls.sync();
@@ -264,9 +280,63 @@ class Game {
   private applyQuality(): void {
     if (this.ctx === null || this.view === null || this.world === null) return;
     const preset = QUALITY_PRESETS[this.settings.quality];
-    resizeRenderer(this.ctx, preset);
-    applyFog(this.ctx, preset, this.world.level.lighting.fogScale);
+    this.resize();
+    this.ambience?.setPreset(preset);
     this.view.applyQuality(preset);
+  }
+
+  /**
+   * Contexto gráfico recuperado: Three.js vuelve a subir geometrías y texturas por su cuenta.
+   * Si se estaba jugando (o en pausa), se vuelve en pausa; si caía la pantalla de derrota, se muestra;
+   * desde cualquier otra pantalla se vuelve al menú (el progreso ya está guardado).
+   */
+  private onContextRestored(): void {
+    const before = this.stateBeforeLoss;
+    this.stateBeforeLoss = 'start';
+    if (before === 'playing' || before === 'paused') {
+      this.state = 'paused';
+      this.showPause();
+    } else if (before === 'dying') {
+      this.showDefeat();
+    } else {
+      this.toMenu();
+    }
+  }
+
+  /**
+   * Cambio de devicePixelRatio sin cambiar el tamaño de la ventana (por ejemplo, al moverla a otro
+   * monitor o al hacer zoom): no dispara `resize`, así que se vigila con una media query.
+   */
+  private watchPixelRatio(): void {
+    try {
+      const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+      mq.addEventListener(
+        'change',
+        () => {
+          this.resize();
+          this.watchPixelRatio();
+        },
+        { once: true },
+      );
+    } catch {
+      // Sin matchMedia: el redimensionado normal sigue funcionando.
+    }
+  }
+
+  /** Ajusta el render al tamaño de la ventana, al devicePixelRatio y a la escala dinámica. */
+  private resize(): void {
+    if (this.ctx === null) return;
+    const scale = this.settings.dynamicResolution ? this.dynRes.scale : 1;
+    resizeRenderer(this.ctx, QUALITY_PRESETS[this.settings.quality], scale);
+  }
+
+  /** Resolución dinámica: mide los FPS mientras se juega y baja un escalón si caen de forma sostenida. */
+  private updateDynamicResolution(frameDt: number): void {
+    if (!this.settings.dynamicResolution || !this.dynRes.update(frameDt)) return;
+    this.save.settings.renderScale = this.dynRes.scale;
+    this.resize();
+    this.persist();
+    this.screens.toast(TEXTS.notices.resolutionLowered, 3);
   }
 
   private openSelect(): void {
@@ -281,7 +351,7 @@ class Game {
     this.save.lastSeed = chosen;
     this.persist();
     this.ensureAudio();
-    this.loadLevel(this.run.levelId, chosen);
+    this.loadLevel(this.run.levelId, chosen, mode === 'drift');
     this.enterPlaying();
     this.announceLevel();
   }
@@ -299,6 +369,10 @@ class Game {
     const w = this.world;
     if (w === null) return;
     const m = TEXTS.messages;
+    if (w.drift !== null) {
+      this.screens.toast(m.driftIntro, 5);
+      return;
+    }
     const goal = w.fusesRequired > 0 ? m.objectiveFuses(w.fusesRequired) : m.objectiveExit;
     this.screens.toast(`${m.levelIntro(w.level.id, w.level.name)}. ${goal}`, 5);
   }
@@ -313,7 +387,7 @@ class Game {
     if (this.run === null) return;
     retryLevel(this.run);
     this.ensureAudio();
-    this.loadLevel(this.run.levelId, this.run.seed);
+    this.loadLevel(this.run.levelId, this.run.seed, this.run.mode === 'drift');
     this.enterPlaying();
     this.announceLevel();
   }
@@ -343,13 +417,17 @@ class Game {
     this.hud.setCrosshair(this.settings.crosshair);
     this.input.clear();
     this.loop.reset();
+    this.dynRes.reset();
     this.binding?.requestLock();
     this.ctx?.renderer.domElement.focus();
   }
 
   private showPause(): void {
     const w = this.world;
-    if (w !== null) this.screens.showPause(w.seedText, w.level.name, w.time);
+    if (w !== null) {
+      const name = w.drift !== null ? TEXTS.pause.driftName : w.level.name;
+      this.screens.showPause(w.seedText, name, w.time);
+    }
   }
 
   private pause(): void {
@@ -407,7 +485,17 @@ class Game {
   private showDefeat(): void {
     this.state = 'defeat';
     this.audio.suspend();
-    this.screens.showDefeat();
+    const drift = this.world?.drift ?? null;
+    if (drift === null || this.world === null) {
+      this.screens.showDefeat();
+      return;
+    }
+    // Deriva: se registra el resultado y se muestra con la mejor marca.
+    const result = drift.tracker.result(this.world.time);
+    const progress = this.save.progress;
+    const newBest = recordDrift(progress, result);
+    this.persist();
+    this.screens.showDefeat({ ...result, newBest, best: progress.drift });
   }
 
   private onAction(action: Action, code: string): void {
@@ -471,7 +559,8 @@ class Game {
   private updateHud(world: World, now: number): void {
     const p = world.player;
     this.hud.setStamina(world.stamina.ratio, world.stamina.exhausted);
-    this.hud.setFuses(world.fusesCollected, world.fusesRequired);
+    if (world.drift !== null) this.hud.setDriftStats(world.drift.tracker.meters, world.time);
+    else this.hud.setFuses(world.fusesCollected, world.fusesRequired);
     this.hud.setNoise(world.noiseLevel, world.recentNoise);
     this.hud.setHidden(world.hidden !== null);
     const f = world.focus;
@@ -480,7 +569,7 @@ class Game {
       world.hidden !== null
         ? h.promptLeave
         : world.focusHide !== null
-          ? h.promptHide(world.level.hideKind)
+          ? h.promptHide(world.levelAt(world.focusHide.x, world.focusHide.z).hideKind)
           : f === null
             ? ''
             : f.kind === 'fuse'
@@ -490,6 +579,11 @@ class Game {
                 : h.promptExitLocked,
     );
     const exit = world.layout.exit;
+    // En Deriva no hay salida: ni ayuda de dirección ni subtítulo del zumbido.
+    if (exit === null) {
+      this.hud.setDirection('');
+      return;
+    }
     const sector = sectorOf(relativeAngle(p.x, p.z, p.yaw, exit.x, exit.z));
     const dirText = TEXTS.subtitles.directions[sector] ?? '';
     this.hud.setDirection(
@@ -538,6 +632,7 @@ class Game {
         this.threatCues.update(world, this.hud, now, this.settings.subtitles);
       }
       this.sceneAudio.update(world, this.exitHum, frameDt);
+      this.updateDynamicResolution(frameDt);
     } else if (this.state === 'dying') {
       this.dyingTime += frameDt;
       if (this.dyingTime >= DEFEAT_FADE_SECONDS) this.showDefeat();
@@ -553,6 +648,7 @@ class Game {
     const s = this.settings;
     this.rig.update(world.player, alpha, frameDt, s);
     const cam = ctx.camera.position;
+    this.updateAmbience(world, cam.x, cam.z, frameDt);
     const debug = this.hud.debugEnabled;
     this.view.update(cam.x, cam.z, world.time, s.reduceFlicker, debug);
     this.objects?.update(world);
@@ -563,6 +659,19 @@ class Game {
 
     if (debug) this.updateDebug(frameDt, world, ctx);
   };
+
+  /** En Deriva, al cruzar a una zona de otro nivel el ambiente y el eco pasan al suyo poco a poco. */
+  private updateAmbience(world: World, x: number, z: number, dt: number): void {
+    if (world.drift !== null) {
+      const level = world.levelAt(x, z);
+      if (level.id !== this.ambienceLevelId) {
+        this.ambienceLevelId = level.id;
+        this.ambience?.blendTo(level);
+        this.audio.whenReady((e) => e.setReverb(level.audio.reverb, level.audio.reverbSeconds));
+      }
+    }
+    this.ambience?.update(dt);
+  }
 
   private updateDebug(frameDt: number, world: World, ctx: RenderContext): void {
     this.fpsFrames++;
@@ -576,7 +685,7 @@ class Game {
     this.hud.setDebug({
       fps,
       seed: world.seedText,
-      level: world.level.name,
+      level: world.levelAt(world.player.x, world.player.z).name,
       cx: chunkOf(world.player.x),
       cz: chunkOf(world.player.z),
       x: world.player.x,
@@ -587,6 +696,7 @@ class Game {
       buildMs: st.lastBuildMs,
       peakBuildMs: this.view.takePeakBuildMs(),
       lights: st.realLights,
+      scale: this.settings.dynamicResolution ? this.dynRes.scale : 1,
       calls: info.render.calls,
       geometries: info.memory.geometries,
       textures: info.memory.textures,

@@ -5,7 +5,8 @@
  */
 import { DIFFICULTIES, SETTINGS_LIMITS, type Difficulty } from '../data/balance';
 import { META } from '../data/meta';
-import { QUALITIES, type Quality } from '../data/quality';
+import { DYNAMIC_RES, QUALITIES, type Quality } from '../data/quality';
+import { snapScale } from '../core/dynamic-res';
 import { normalizeSeed } from '../core/params';
 import { defaultProgress, sanitizeProgress, type Progress } from '../game/progress';
 
@@ -24,6 +25,10 @@ export interface Settings {
   directionAid: boolean;
   /** Dificultad de la criatura. */
   difficulty: Difficulty;
+  /** Resolución dinámica: baja la resolución interna si los FPS caen de forma sostenida. */
+  dynamicResolution: boolean;
+  /** Escala de resolución interna guardada por la resolución dinámica (1 = completa). */
+  renderScale: number;
 }
 
 export interface SaveData {
@@ -55,6 +60,8 @@ export function defaultSettings(prefersReducedMotion: boolean): Settings {
     subtitles: true,
     directionAid: false,
     difficulty: 'normal',
+    dynamicResolution: true,
+    renderScale: 1,
   };
 }
 
@@ -91,6 +98,11 @@ function readDifficulty(v: unknown, fallback: Difficulty): Difficulty {
     : fallback;
 }
 
+/** Escala mínima aceptada al leer un guardado (el último escalón). */
+function minScale(): number {
+  return DYNAMIC_RES.steps[DYNAMIC_RES.steps.length - 1] as number;
+}
+
 /** Valida unos ajustes desconocidos campo por campo. */
 export function sanitizeSettings(raw: unknown, prefersReducedMotion: boolean): Settings {
   const d = defaultSettings(prefersReducedMotion);
@@ -109,6 +121,9 @@ export function sanitizeSettings(raw: unknown, prefersReducedMotion: boolean): S
     directionAid: readBool(raw.directionAid, d.directionAid),
     // Los guardados de los hitos anteriores no la tienen: Normal.
     difficulty: readDifficulty(raw.difficulty, d.difficulty),
+    // Los guardados anteriores al Hito 4 no los tienen: activada y a resolución completa.
+    dynamicResolution: readBool(raw.dynamicResolution, d.dynamicResolution),
+    renderScale: snapScale(readNumber(raw.renderScale, minScale(), 1, d.renderScale)),
   };
 }
 

@@ -2,6 +2,8 @@
  * Vista 3D del mundo: ejecuta el plan de streaming construyendo mallas de chunks dentro de un
  * presupuesto de milisegundos por frame, descarga (con dispose) lo lejano, anima el parpadeo
  * de los paneles y reparte el pool de luces reales. Nunca modifica el estado del juego.
+ * Cada nivel tiene su juego de texturas, materiales y panel; se crea cuando aparece su primer chunk
+ * (en el modo Deriva conviven chunks de niveles distintos).
  */
 import {
   BoxGeometry,
@@ -13,7 +15,7 @@ import {
 } from 'three';
 import { hashSeed, mix32 } from '../core/rng';
 import { HIDING, THREAT, WORLD } from '../data/balance';
-import type { LevelDef } from '../data/levels';
+import { getLevel, type LevelDef } from '../data/levels';
 import type { QualityPreset } from '../data/quality';
 import { creatureDim, flickerLevel, type FlickerParams } from '../game/flicker';
 import { chunkOf, keyToCx, keyToCz, type ChunkStore } from '../game/grid';
@@ -39,6 +41,44 @@ export interface ViewStats {
 }
 
 const MAX_THREATS = 4;
+
+/** Texturas, materiales y geometría del panel de un nivel. */
+interface LevelLook {
+  readonly level: LevelDef;
+  readonly materials: ChunkMaterials;
+  readonly panelGeometry: BufferGeometry;
+  textures: WorldTextures | null;
+}
+
+function createLook(level: LevelDef): LevelLook {
+  return {
+    level,
+    materials: {
+      floor: new MeshLambertMaterial({ color: 0xffffff }),
+      ceiling: new MeshLambertMaterial({ color: 0xffffff }),
+      wall: new MeshLambertMaterial({ color: 0xffffff }),
+      shelf: new MeshLambertMaterial({ color: 0xffffff }),
+      panel: new MeshBasicMaterial({ color: new Color(level.palette.panel) }),
+      hide: new MeshLambertMaterial({ color: 0xffffff }),
+    },
+    panelGeometry: new PlaneGeometry(level.lighting.panelWidth, level.lighting.panelDepth).rotateX(
+      Math.PI / 2,
+    ),
+    textures: null,
+  };
+}
+
+function disposeLook(look: LevelLook): void {
+  look.textures?.dispose();
+  look.panelGeometry.dispose();
+  const m = look.materials;
+  m.floor.dispose();
+  m.ceiling.dispose();
+  m.wall.dispose();
+  m.shelf.dispose();
+  m.panel.dispose();
+  m.hide.dispose();
+}
 
 /** Posiciones de las criaturas activas; las luces cercanas a ellas se atenúan suavemente. */
 export class ThreatLights {
@@ -93,10 +133,12 @@ export class WorldView {
   private currentCz = Number.NaN;
   private radius = 2;
   private budgetMs = 4;
-  private textures: WorldTextures | null = null;
-  private readonly materials: ChunkMaterials;
-  private readonly panelGeometry: BufferGeometry;
+  private preset: QualityPreset | null = null;
+  /** Juego de texturas y materiales de cada nivel que ya apareció. */
+  private readonly looks = new Map<number, LevelLook>();
   private readonly hideGeometry: BufferGeometry;
+  /** Techos de los cuatro vecinos del chunk que se construye (reutilizado). */
+  private readonly neighborHeights = [0, 0, 0, 0];
   private readonly lights: LightPool;
   /** Criaturas cerca de las que se atenúan las luces. */
   readonly threats = new ThreatLights();
@@ -116,41 +158,53 @@ export class WorldView {
   constructor(
     private readonly ctx: RenderContext,
     private readonly store: ChunkStore,
-    private readonly level: LevelDef,
+    /** Niveles que pueden aparecer (uno en el modo Salida, todos en Deriva). */
+    levels: readonly LevelDef[],
     private readonly seedHash: number,
   ) {
-    this.materials = {
-      floor: new MeshLambertMaterial({ color: 0xffffff }),
-      ceiling: new MeshLambertMaterial({ color: 0xffffff }),
-      wall: new MeshLambertMaterial({ color: 0xffffff }),
-      shelf: new MeshLambertMaterial({ color: 0xffffff }),
-      panel: new MeshBasicMaterial({ color: new Color(level.palette.panel) }),
-      hide: new MeshLambertMaterial({ color: 0xffffff }),
-    };
     this.hideGeometry = new BoxGeometry(HIDING.width, HIDING.height, HIDING.depth);
-    this.panelGeometry = new PlaneGeometry(
-      level.lighting.panelWidth,
-      level.lighting.panelDepth,
-    ).rotateX(Math.PI / 2);
-    this.lights = new LightPool(ctx.scene, level);
+    this.lights = new LightPool(ctx.scene, levels);
   }
 
-  /** Aplica una calidad: texturas, radio de carga, presupuesto y número de luces. */
-  applyQuality(preset: QualityPreset): void {
-    this.textures?.dispose();
-    const texSeed = mix32(this.seedHash ^ hashSeed(this.level.name));
-    this.textures = createWorldTextures(texSeed, this.level, preset.textureSize, preset.anisotropy);
-    const m = this.materials;
-    (m.floor as MeshLambertMaterial).map = this.textures.floor;
-    (m.ceiling as MeshLambertMaterial).map = this.textures.ceiling;
-    (m.wall as MeshLambertMaterial).map = this.textures.wall;
-    (m.shelf as MeshLambertMaterial).map = this.textures.shelf;
-    (m.hide as MeshLambertMaterial).map = this.textures.hide;
+  /** Juego del nivel; se crea (con las texturas de la calidad actual) la primera vez que se pide. */
+  private look(level: LevelDef): LevelLook {
+    let look = this.looks.get(level.id);
+    if (look === undefined) {
+      look = createLook(level);
+      this.looks.set(level.id, look);
+      if (this.preset !== null) this.applyTextures(look, this.preset);
+    }
+    return look;
+  }
+
+  /** (Re)crea las texturas de un nivel con la calidad dada y las asigna a sus materiales. */
+  private applyTextures(look: LevelLook, preset: QualityPreset): void {
+    look.textures?.dispose();
+    const texSeed = mix32(this.seedHash ^ hashSeed(look.level.name));
+    const t = createWorldTextures(texSeed, look.level, preset.textureSize, preset.anisotropy);
+    look.textures = t;
+    const m = look.materials;
+    (m.floor as MeshLambertMaterial).map = t.floor;
+    (m.ceiling as MeshLambertMaterial).map = t.ceiling;
+    (m.wall as MeshLambertMaterial).map = t.wall;
+    (m.shelf as MeshLambertMaterial).map = t.shelf;
+    (m.hide as MeshLambertMaterial).map = t.hide;
     m.shelf.needsUpdate = true;
     m.hide.needsUpdate = true;
     m.floor.needsUpdate = true;
     m.ceiling.needsUpdate = true;
     m.wall.needsUpdate = true;
+  }
+
+  /** Nivel del chunk que contiene (x, z) en metros. */
+  levelAt(x: number, z: number): LevelDef {
+    return this.store.levelAt(chunkOf(x), chunkOf(z));
+  }
+
+  /** Aplica una calidad: texturas, radio de carga, presupuesto y número de luces. */
+  applyQuality(preset: QualityPreset): void {
+    this.preset = preset;
+    for (const look of this.looks.values()) this.applyTextures(look, preset);
     this.radius = preset.chunkRadius;
     this.budgetMs = preset.buildBudgetMs;
     this.lights.setCount(preset.realLights);
@@ -178,15 +232,26 @@ export class WorldView {
   private buildNext(): void {
     const key = this.queue.shift();
     if (key === undefined || this.views.has(key)) return;
-    const chunk = this.store.get(keyToCx(key), keyToCz(key));
+    const cx = keyToCx(key);
+    const cz = keyToCz(key);
+    const chunk = this.store.get(cx, cz);
+    const look = this.look(getLevel(chunk.levelId));
+    // Techos de los vecinos (oeste, este, norte, sur) para los faldones entre niveles.
+    const at = this.store.levelAt;
+    const nh = this.neighborHeights;
+    nh[0] = at(cx - 1, cz).ceilingHeight;
+    nh[1] = at(cx + 1, cz).ceilingHeight;
+    nh[2] = at(cx, cz - 1).ceilingHeight;
+    nh[3] = at(cx, cz + 1).ceilingHeight;
     const view = buildChunkView(
       key,
       chunk,
-      this.level,
-      this.materials,
-      this.panelGeometry,
+      look.level,
+      look.materials,
+      look.panelGeometry,
       this.seedHash,
       this.hideGeometry,
+      nh,
     );
     this.ctx.scene.add(view.mesh);
     if (view.panels !== null) this.ctx.scene.add(view.panels);
@@ -291,14 +356,8 @@ export class WorldView {
   dispose(): void {
     for (const key of [...this.views.keys()]) this.unload(key);
     this.hideGeometry.dispose();
-    this.materials.hide.dispose();
     this.lights.dispose();
-    this.textures?.dispose();
-    this.panelGeometry.dispose();
-    this.materials.floor.dispose();
-    this.materials.ceiling.dispose();
-    this.materials.wall.dispose();
-    this.materials.shelf.dispose();
-    this.materials.panel.dispose();
+    for (const look of this.looks.values()) disposeLook(look);
+    this.looks.clear();
   }
 }

@@ -11,6 +11,7 @@
 import { EDGE, WORLD } from '../data/balance';
 import type { GenParams, LevelDef } from '../data/levels';
 import { hash3, hashToUnit, Rng } from '../core/rng';
+import { borderLevel, type LevelMap } from './regions';
 
 export const N = WORLD.chunkCells;
 
@@ -32,6 +33,8 @@ export interface HideCell {
 export interface ChunkData {
   readonly cx: number;
   readonly cz: number;
+  /** Nivel (id) con el que se generó el chunk. */
+  readonly levelId: number;
   readonly vWalls: Uint8Array;
   readonly hWalls: Uint8Array;
   readonly columns: Uint8Array;
@@ -320,12 +323,23 @@ function placeHides(chunk: ChunkData, seed: number, level: LevelDef): void {
   }
 }
 
-/** Genera el chunk (cx, cz) del nivel con la semilla dada. */
-export function generateChunk(seed: number, level: LevelDef, cx: number, cz: number): ChunkData {
+/**
+ * Genera el chunk (cx, cz) del nivel con la semilla dada. `levelAt` da el nivel de los chunks vecinos
+ * (modo Deriva): cada borde compartido usa el nivel que decide `borderLevel`, así los dos lados
+ * coinciden aunque sean de niveles distintos. Sin `levelAt`, los vecinos son del mismo nivel.
+ */
+export function generateChunk(
+  seed: number,
+  level: LevelDef,
+  cx: number,
+  cz: number,
+  levelAt?: LevelMap,
+): ChunkData {
   const g = level.gen;
   const chunk: ChunkData = {
     cx,
     cz,
+    levelId: level.id,
     vWalls: new Uint8Array((N + 1) * N).fill(1),
     hWalls: new Uint8Array(N * (N + 1)).fill(1),
     columns: new Uint8Array(N * N),
@@ -335,10 +349,12 @@ export function generateChunk(seed: number, level: LevelDef, cx: number, cz: num
   };
 
   // 1. Bordes: aberturas decididas por el hash del borde compartido con cada vecino.
-  const west = borderOpenings(seed, level, true, cx, cz);
-  const east = borderOpenings(seed, level, true, cx + 1, cz);
-  const north = borderOpenings(seed, level, false, cx, cz);
-  const south = borderOpenings(seed, level, false, cx, cz + 1);
+  const side = (nx: number, nz: number): LevelDef =>
+    levelAt === undefined ? level : borderLevel(level, levelAt(nx, nz));
+  const west = borderOpenings(seed, side(cx - 1, cz), true, cx, cz);
+  const east = borderOpenings(seed, side(cx + 1, cz), true, cx + 1, cz);
+  const north = borderOpenings(seed, side(cx, cz - 1), false, cx, cz);
+  const south = borderOpenings(seed, side(cx, cz + 1), false, cx, cz + 1);
   for (let i = 0; i < N; i++) {
     if (west[i] === 1) chunk.vWalls[vIndex(0, i)] = 0;
     if (east[i] === 1) chunk.vWalls[vIndex(N, i)] = 0;

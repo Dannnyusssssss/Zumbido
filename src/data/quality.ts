@@ -49,3 +49,19 @@ export const QUALITY_PRESETS: Readonly<Record<Quality, QualityPreset>> = {
 };
 
 export const QUALITIES: readonly Quality[] = ['low', 'medium', 'high'];
+
+/** Resolución dinámica (ajuste opcional): baja la resolución interna si los FPS caen de forma sostenida. */
+export const DYNAMIC_RES = {
+  /** Por debajo de estos FPS, una ventana de medición cuenta como lenta. */
+  minFps: 50,
+  /** Segundos lentos seguidos antes de bajar un escalón. */
+  sustainSeconds: 5,
+  /** Duración de cada ventana de medición. */
+  windowSeconds: 1,
+  /** Segundos que no se miden al entrar en juego (carga de chunks, compilación de shaders). */
+  warmupSeconds: 3,
+  /** Frames más largos que esto (pestaña oculta, pausa) no se cuentan. */
+  maxFrameSeconds: 0.25,
+  /** Escalones de la resolución interna, de mayor a menor. */
+  steps: [1, 0.85, 0.7] as readonly number[],
+} as const;

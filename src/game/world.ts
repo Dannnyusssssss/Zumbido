@@ -1,18 +1,26 @@
 /**
- * Estado de una partida de un nivel y orden fijo de los sistemas de lógica.
- * Todo lo que hay aquí es puro: no usa Three.js ni el DOM.
+ * Estado de una partida de un nivel (modo Salida) o de una deriva (mundo sin fin por zonas) y orden
+ * fijo de los sistemas de lógica. Todo lo que hay aquí es puro: no usa Three.js ni el DOM.
  */
 import type { InputState } from '../core/input';
 import { hashSeed } from '../core/rng';
-import { DIFFICULTY, NOISE, type Difficulty, type DifficultyParams } from '../data/balance';
+import {
+  DIFFICULTY,
+  DRIFT,
+  NOISE,
+  WORLD,
+  type Difficulty,
+  type DifficultyParams,
+} from '../data/balance';
 import type { LevelDef } from '../data/levels';
 import { ChalkPool } from './chalk';
 import type { Box } from './collision';
-import { ChunkStore, WorldGrid } from './grid';
+import { driftBaseTuning, DriftTracker } from './drift';
+import { cellOf, chunkOf, ChunkStore, WorldGrid } from './grid';
 import { Director } from './director';
 import { Enemy } from './enemy';
 import { HideIndex, type HideSpot } from './hiding';
-import { exitBox, fuseBox, levelLayout, type LevelLayout, type PlacedObject } from './layout';
+import { exitBox, fuseBox, levelLayout, type PlacedObject } from './layout';
 import {
   noiseLevelOf,
   noiseRadius,
@@ -22,9 +30,11 @@ import {
   type NoiseLevel,
 } from './noise';
 import { Player, type MoveIntent } from './player';
+import { driftLevelMap } from './regions';
 import { Stamina } from './stamina';
 import { chalkSystem } from './systems/chalk';
 import { captureSystem, directorSystem, enemySystem, threatSystem } from './systems/creatures';
+import { driftSystem } from './systems/drift';
 import { interactionSystem } from './systems/interaction';
 import { movementSystem } from './systems/movement';
 import { SPAWN_POINT } from './worldgen';
@@ -45,13 +55,34 @@ export interface WorldOptions {
   readonly difficulty?: Difficulty;
   /** Con false no aparece ninguna criatura (tests y parámetro de depuración). */
   readonly creatures?: boolean;
+  /** Modo Deriva: mundo sin fin por zonas, sin salida ni fusibles. */
+  readonly drift?: boolean;
 }
+
+/** Objetivo de la partida: la salida (null en Deriva) y los fusibles. */
+export interface WorldLayout {
+  readonly exit: PlacedObject | null;
+  readonly fuses: readonly PlacedObject[];
+}
+
+/** Estado propio del modo Deriva. */
+export interface DriftState {
+  readonly tracker: DriftTracker;
+  /** Parámetros de la criatura sin la atención acumulada. */
+  readonly base: DifficultyParams;
+  /** Segundos hasta el próximo recálculo de la atención. */
+  tuningTimer: number;
+}
+
+/** Sal de las criaturas de Deriva (distinta de la de cada nivel). */
+const DRIFT_SALT = 0x0d51f700;
 
 type System = (world: World, input: InputState, dt: number) => void;
 
 /** Orden de ejecución de los sistemas en cada paso fijo. Es el único lugar donde se declara. */
 const SYSTEMS: readonly System[] = [
   movementSystem,
+  driftSystem,
   interactionSystem,
   chalkSystem,
   directorSystem,
@@ -67,7 +98,9 @@ export class World {
   readonly store: ChunkStore;
   readonly grid: WorldGrid;
   readonly player: Player;
-  readonly layout: LevelLayout;
+  readonly layout: WorldLayout;
+  /** Estado del modo Deriva (null en el modo Salida). */
+  readonly drift: DriftState | null;
   readonly stamina = new Stamina();
   readonly chalk = new ChalkPool();
   readonly intent: MoveIntent = { forward: 0, strafe: 0, run: false };
@@ -104,28 +137,53 @@ export class World {
   readonly paths = new PathDistance();
 
   readonly difficulty: Difficulty;
-  readonly tuning: DifficultyParams;
+  /** Parámetros de la criatura; en Deriva cambian con el tiempo (atención creciente). */
+  tuning: DifficultyParams;
   readonly creaturesEnabled: boolean;
 
+  /**
+   * `level` es el nivel de la partida en el modo Salida; en Deriva es el de la zona de inicio y el
+   * resto de zonas sale de la semilla.
+   */
   constructor(seedText: string, level: LevelDef, options: WorldOptions = {}) {
     this.difficulty = options.difficulty ?? 'normal';
-    this.tuning = DIFFICULTY[this.difficulty];
     this.creaturesEnabled = options.creatures ?? true;
     this.seedText = seedText;
     this.seed = hashSeed(seedText);
     this.level = level;
-    this.store = new ChunkStore(this.seed, level);
-    this.grid = new WorldGrid(this.store);
     this.player = new Player(SPAWN_POINT.x, SPAWN_POINT.z);
-    this.layout = levelLayout(this.seed, level);
-    this.obstacles = [exitBox(this.layout.exit), ...this.layout.fuses.map(fuseBox)];
+    const drift = options.drift === true;
+    if (drift) {
+      const base = driftBaseTuning(this.difficulty);
+      this.tuning = base;
+      this.drift = {
+        tracker: new DriftTracker(cellOf(SPAWN_POINT.x), cellOf(SPAWN_POINT.z)),
+        base,
+        tuningTimer: 0,
+      };
+      this.store = new ChunkStore(this.seed, level, WORLD.chunkCacheSize, driftLevelMap(this.seed));
+      this.layout = { exit: null, fuses: [] };
+    } else {
+      this.tuning = DIFFICULTY[this.difficulty];
+      this.drift = null;
+      this.store = new ChunkStore(this.seed, level);
+      this.layout = levelLayout(this.seed, level);
+    }
+    this.grid = new WorldGrid(this.store);
+    const exit = this.layout.exit;
+    this.obstacles = [...(exit === null ? [] : [exitBox(exit)]), ...this.layout.fuses.map(fuseBox)];
     this.fuseTaken = this.layout.fuses.map(() => false);
     this.hides = new HideIndex(this.store, this.obstacles);
-    const count = this.creaturesEnabled ? level.creatures : 0;
-    const creatureSeed = this.seed ^ level.salt;
+    const count = this.creaturesEnabled ? (drift ? DRIFT.creatures : level.creatures) : 0;
+    const creatureSeed = this.seed ^ (drift ? DRIFT_SALT : level.salt);
     this.enemies = [];
     for (let i = 0; i < count; i++) this.enemies.push(new Enemy(i, creatureSeed));
     this.director = new Director(creatureSeed, count, this.tuning);
+  }
+
+  /** Nivel de la zona que contiene (x, z) en metros (en Salida, siempre el de la partida). */
+  levelAt(x: number, z: number): LevelDef {
+    return this.store.levelAt(chunkOf(x), chunkOf(z));
   }
 
   get playerHidden(): boolean {
@@ -147,7 +205,7 @@ export class World {
 
   /** La salida funciona cuando están todos los fusibles (en el nivel 1 desde el principio). */
   get exitActive(): boolean {
-    return this.fusesCollected >= this.fusesRequired;
+    return this.layout.exit !== null && this.fusesCollected >= this.fusesRequired;
   }
 
   /** Ruidos de este paso. */

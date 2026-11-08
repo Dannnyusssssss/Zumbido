@@ -132,14 +132,16 @@ export class ObjectsView {
     const leafMesh = new Mesh(leaf, this.doorMaterial);
     leafMesh.position.set(0, (H - 0.1) / 2, 0);
     door.add(left, right, lintel, leafMesh);
-    door.position.set(exit.x, 0, exit.z);
-    door.rotation.y = exit.rot === 0 ? 0 : Math.PI / 2;
-    this.root.add(door);
-
     // Luz tenue propia de la salida (fija durante todo el nivel: no cambia el número de luces).
     this.exitLight = new PointLight(EXIT_IDLE.clone(), 1.4, 7, 2);
-    this.exitLight.position.set(exit.x, 1.6, exit.z);
-    this.root.add(this.exitLight);
+    // En el modo Deriva no hay salida: ni la puerta ni su luz entran en la escena.
+    if (exit !== null) {
+      door.position.set(exit.x, 0, exit.z);
+      door.rotation.y = exit.rot === 0 ? 0 : Math.PI / 2;
+      this.root.add(door);
+      this.exitLight.position.set(exit.x, 1.6, exit.z);
+      this.root.add(this.exitLight);
+    }
 
     // Fusibles: caja con un piloto fijo (sin parpadeo).
     const fuseGeo = new BoxGeometry(

@@ -4,7 +4,8 @@
  */
 import { LEVEL_COUNT } from '../data/levels';
 
-export type RunMode = 'full' | 'single';
+/** Partida completa, nivel suelto o deriva (mundo sin fin, sin niveles que completar). */
+export type RunMode = 'full' | 'single' | 'drift';
 
 export interface RunState {
   readonly mode: RunMode;
@@ -25,9 +26,9 @@ export interface LevelResult {
   readonly runTotal: number | null;
 }
 
-/** Empieza una partida. La completa siempre empieza en el nivel 1. */
+/** Empieza una partida. La completa y la deriva empiezan siempre en el nivel 1 (la deriva, en su zona). */
 export function startRun(mode: RunMode, levelId: number, seed: string): RunState {
-  const start = mode === 'full' ? 1 : Math.min(Math.max(1, Math.floor(levelId)), LEVEL_COUNT);
+  const start = mode === 'single' ? Math.min(Math.max(1, Math.floor(levelId)), LEVEL_COUNT) : 1;
   return { mode, seed, levelId: start, times: [] };
 }
 
@@ -45,9 +46,9 @@ export function completeLevel(run: RunState, time: number): LevelResult {
   };
 }
 
-/** Pasa al siguiente nivel. Devuelve false si no hay más. */
+/** Pasa al siguiente nivel. Devuelve false si no hay más (o si es una deriva). */
 export function advanceRun(run: RunState): boolean {
-  if (run.levelId >= LEVEL_COUNT) return false;
+  if (run.mode === 'drift' || run.levelId >= LEVEL_COUNT) return false;
   run.levelId += 1;
   return true;
 }

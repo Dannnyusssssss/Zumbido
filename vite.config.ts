@@ -9,7 +9,10 @@ export default defineConfig({
       // El título del HTML se toma de META para no escribirlo a mano en dos sitios.
       name: 'inject-meta',
       transformIndexHtml: (html) =>
-        html.replaceAll('%GAME_TITLE%', META.title).replaceAll('%GAME_LANG%', META.lang),
+        html
+          .replaceAll('%GAME_TITLE%', META.title)
+          .replaceAll('%GAME_LANG%', META.lang)
+          .replaceAll('%GAME_DESCRIPTION%', META.description),
     },
   ],
   build: {
