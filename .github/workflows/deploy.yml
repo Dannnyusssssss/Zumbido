@@ -28,9 +28,25 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # Bloquea la publicación si alguna dependencia tiene vulnerabilidades altas o críticas.
+      - run: npm audit --audit-level=high
       - run: npm run lint
       - run: npm run test
       - run: npm run build
+      # Bloquea la publicación si el código o dist/ contienen algo con forma de clave o token:
+      # claves privadas, tokens de GitHub, AWS, Google, Slack u OpenAI, o asignaciones del tipo
+      # apiKey = "valor largo". Se excluyen este workflow (contiene el patrón) y el lockfile.
+      - name: Buscar secretos
+        env:
+          PATRON: 'BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|sk-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|(api[_-]?key|secret|passw|bearer).{0,20}[:=] *.?[A-Za-z0-9+/_-]{16,}'
+        run: |
+          if git grep -n -I -i -E "$PATRON" -- . ':!package-lock.json' ':!.github/workflows'; then
+            echo "Posible secreto en el código: revisa las líneas de arriba." && exit 1
+          fi
+          if grep -r -n -I -i -E "$PATRON" dist; then
+            echo "Posible secreto en dist/: revisa las líneas de arriba." && exit 1
+          fi
+          echo "Sin secretos."
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
