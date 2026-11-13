@@ -13,3 +13,5 @@ Con el overlay activo, cada criatura tiene una línea: estado (`dormant`, `wande
 Se pueden combinar: `?debug&seed=ABC123&creature=off`.
 
 Con el overlay desactivado no se mide ni se actualiza nada de depuración.
+
+Una partida con `debug` o con `creature=off` no guarda mejores tiempos, marcas de Deriva ni desbloqueos de niveles: los récords solo reflejan partidas normales. `seed` no cuenta como ayuda.

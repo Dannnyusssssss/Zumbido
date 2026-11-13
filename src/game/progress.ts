@@ -76,9 +76,14 @@ export function sanitizeProgress(raw: unknown): Progress {
   };
 }
 
+/*
+ * `assisted`: partida con ayudas de depuración (por ejemplo sin criaturas). No guarda tiempos,
+ * marcas ni desbloqueos, para que los récords solo reflejen partidas normales.
+ */
+
 /** Registra una partida de Deriva. Devuelve true si es la mejor puntuación. */
-export function recordDrift(p: Progress, result: DriftResult): boolean {
-  if (!(result.time > 0)) return false;
+export function recordDrift(p: Progress, result: DriftResult, assisted = false): boolean {
+  if (assisted || !(result.time > 0)) return false;
   if (p.drift === null || result.score > p.drift.score) {
     p.drift = { score: result.score, meters: result.meters, time: result.time };
     return true;
@@ -87,8 +92,8 @@ export function recordDrift(p: Progress, result: DriftResult): boolean {
 }
 
 /** Registra un nivel completado. Devuelve true si es un nuevo mejor tiempo del nivel. */
-export function recordLevel(p: Progress, levelId: number, time: number): boolean {
-  if (levelId < 1 || levelId > LEVEL_COUNT || !(time > 0)) return false;
+export function recordLevel(p: Progress, levelId: number, time: number, assisted = false): boolean {
+  if (assisted || levelId < 1 || levelId > LEVEL_COUNT || !(time > 0)) return false;
   p.unlocked = Math.max(p.unlocked, Math.min(levelId + 1, LEVEL_COUNT));
   const prev = p.bestTimes[levelId - 1] ?? null;
   if (prev === null || time < prev) {
@@ -99,8 +104,8 @@ export function recordLevel(p: Progress, levelId: number, time: number): boolean
 }
 
 /** Registra una partida completa. Devuelve true si es la mejor. */
-export function recordRun(p: Progress, total: number): boolean {
-  if (!(total > 0)) return false;
+export function recordRun(p: Progress, total: number, assisted = false): boolean {
+  if (assisted || !(total > 0)) return false;
   if (p.bestRun === null || total < p.bestRun) {
     p.bestRun = total;
     return true;

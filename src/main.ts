@@ -11,7 +11,7 @@ import { Sfx } from './audio/sfx';
 import { InputState } from './core/input';
 import { FixedStepLoop } from './core/loop';
 import { DynamicResolution } from './core/dynamic-res';
-import { parseDebugParams, seedFromBytes } from './core/params';
+import { isAssisted, parseDebugParams, seedFromBytes } from './core/params';
 import { dailySeed } from './core/seeds';
 import { HIDING, OBJECTS } from './data/balance';
 import type { Action } from './data/controls';
@@ -100,6 +100,8 @@ class Game {
   private readonly storage = getStorage();
   private readonly save: SaveData;
   private readonly params = parseDebugParams(window.location.search);
+  /** Partida con ayudas de depuración: no guarda tiempos, marcas ni desbloqueos. */
+  private readonly assisted = isAssisted(this.params);
   private readonly input = new InputState();
   private readonly loop = new FixedStepLoop(60);
   private readonly audio = new AudioEngine();
@@ -450,9 +452,9 @@ class Game {
     this.hud.setVisible(false);
     const result = completeLevel(run, world.time);
     const progress = this.save.progress;
-    const newBest = recordLevel(progress, result.levelId, result.time);
+    const newBest = recordLevel(progress, result.levelId, result.time, this.assisted);
     if (result.runFinished && result.runTotal !== null) {
-      const runBest = recordRun(progress, result.runTotal);
+      const runBest = recordRun(progress, result.runTotal, this.assisted);
       this.persist();
       this.state = 'victory';
       this.screens.showVictory({
@@ -493,7 +495,7 @@ class Game {
     // Deriva: se registra el resultado y se muestra con la mejor marca.
     const result = drift.tracker.result(this.world.time);
     const progress = this.save.progress;
-    const newBest = recordDrift(progress, result);
+    const newBest = recordDrift(progress, result, this.assisted);
     this.persist();
     this.screens.showDefeat({ ...result, newBest, best: progress.drift });
   }

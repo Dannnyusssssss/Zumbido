@@ -27,6 +27,14 @@ export function parseDebugParams(search: string): DebugParams {
   return { debug, seed: normalizeSeed(params.get('seed')), creatures };
 }
 
+/**
+ * ¿La partida tiene ayudas de depuración? Sin criaturas o con el overlay (que muestra la posición y
+ * el estado de cada criatura). Una partida con ayudas no guarda récords. La semilla no es una ayuda.
+ */
+export function isAssisted(p: DebugParams): boolean {
+  return p.debug || !p.creatures;
+}
+
 const SEED_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
 /** Construye una semilla de 8 caracteres a partir de bytes aleatorios (los aporta la capa de arranque). */

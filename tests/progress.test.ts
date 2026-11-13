@@ -6,6 +6,7 @@ import { META } from '../src/data/meta';
 import {
   defaultProgress,
   formatTime,
+  recordDrift,
   recordLevel,
   recordRun,
   sanitizeProgress,
@@ -106,6 +107,19 @@ describe('progreso', () => {
     expect(recordRun(p, 400)).toBe(false);
     expect(p.bestRun).toBe(300);
     expect(recordRun(p, 0)).toBe(false);
+  });
+  it('una partida con ayudas de depuración no guarda tiempos, marcas ni desbloqueos', () => {
+    const p = defaultProgress();
+    const before = structuredClone(p);
+    expect(recordLevel(p, 1, 100, true)).toBe(false);
+    expect(recordRun(p, 300, true)).toBe(false);
+    expect(recordDrift(p, { meters: 90, time: 20, score: 130 }, true)).toBe(false);
+    expect(p).toEqual(before);
+    // Con récords ya guardados tampoco los sustituye por otros mejores.
+    recordLevel(p, 1, 100);
+    const saved = structuredClone(p);
+    expect(recordLevel(p, 1, 10, true)).toBe(false);
+    expect(p).toEqual(saved);
   });
   it('valida datos corruptos campo por campo', () => {
     expect(sanitizeProgress(null)).toEqual(defaultProgress());
