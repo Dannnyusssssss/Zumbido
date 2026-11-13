@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeSeed, parseDebugParams, seedFromBytes } from '../src/core/params';
+import { isAssisted, normalizeSeed, parseDebugParams, seedFromBytes } from '../src/core/params';
 
 describe('normalizeSeed', () => {
   it('acepta letras y números y pasa a mayúsculas', () => {
@@ -15,6 +15,22 @@ describe('normalizeSeed', () => {
     expect(normalizeSeed('<script>')).toBeNull();
     expect(normalizeSeed(null)).toBeNull();
     expect(normalizeSeed(undefined)).toBeNull();
+  });
+  it('entradas hostiles: caracteres de control, emojis, HTML, SQL y rutas', () => {
+    for (const bad of [
+      'A\u0000B',
+      'AB\u0007',
+      '‮ABC',
+      'ABC😀',
+      '<img onerror=x>',
+      "' OR 1=1 --",
+      '../../ETC',
+      'A B',
+    ]) {
+      expect(normalizeSeed(bad)).toBeNull();
+    }
+    // Los espacios y saltos de línea de los extremos sí se recortan.
+    expect(normalizeSeed('\t abc \n')).toBe('ABC');
   });
 });
 
@@ -46,6 +62,21 @@ describe('parseDebugParams', () => {
     expect(parseDebugParams('?creature=off').creatures).toBe(false);
     expect(parseDebugParams('?creature=on').creatures).toBe(true);
     expect(parseDebugParams('?creature=OFF').creatures).toBe(true);
+  });
+  it('semillas hostiles en la URL se ignoran sin romper nada', () => {
+    for (const q of ['?seed=A%00B', '?seed=%F0%9F%98%80', '?seed=%3Cscript%3E', '?seed=..%2F..']) {
+      expect(parseDebugParams(q)).toEqual({ debug: false, seed: null, creatures: true });
+    }
+  });
+});
+
+describe('isAssisted', () => {
+  it('sin criaturas o con el overlay es una partida con ayudas; la semilla no cuenta', () => {
+    expect(isAssisted(parseDebugParams(''))).toBe(false);
+    expect(isAssisted(parseDebugParams('?seed=ABC'))).toBe(false);
+    expect(isAssisted(parseDebugParams('?creature=off'))).toBe(true);
+    expect(isAssisted(parseDebugParams('?debug'))).toBe(true);
+    expect(isAssisted(parseDebugParams('?creature=OFF'))).toBe(false);
   });
 });
 

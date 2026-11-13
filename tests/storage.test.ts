@@ -158,6 +158,23 @@ describe('persistencia', () => {
     expect(loadSave(storage, false)).toEqual(defaultSave(false));
   });
 
+  it('entradas hostiles: __proto__, tipos cambiados, texto con control, HTML y marcas imposibles', () => {
+    const storage = new MemoryStorage();
+    // JSON escrito a mano: así `__proto__` llega como clave propia, igual que si el jugador editara el guardado.
+    storage.setItem(
+      META.storageKey,
+      '{"__proto__":{"polluted":true},"version":1,' +
+        '"settings":{"__proto__":{"muted":true},"fov":"90","quality":"ultra","muted":"true"},' +
+        '"lastSeed":"AB\\u0000C<img onerror=x>😀",' +
+        '"progress":{"unlocked":"3","bestTimes":[null,{"x":1},-5],"bestRun":1e308,' +
+        '"drift":{"meters":-1,"time":"20","score":999999}}}',
+    );
+    const save = loadSave(storage, false);
+    expect(save).toEqual(defaultSave(false));
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(Object.getPrototypeOf(save.settings)).toBe(Object.prototype);
+  });
+
   it('cuota llena o almacenamiento bloqueado no rompen el juego', () => {
     expect(writeSave(new FullStorage(), defaultSave(false))).toBe(false);
     expect(writeSave(new BrokenStorage(), defaultSave(false))).toBe(false);
