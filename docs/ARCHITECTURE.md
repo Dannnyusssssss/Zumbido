@@ -86,7 +86,13 @@ Toda señal sonora importante tiene también una señal visual: viñeta direccio
 
 `save/storage.ts` guarda un único objeto JSON en `localStorage` bajo la clave `zumbido:v1`: ajustes, progreso, mejores tiempos, mejor deriva y última semilla.
 
-Al leerlo se valida campo por campo (tipos, rangos y tamaño máximo); lo que falte o no sea válido toma su valor por defecto. Así, los guardados de versiones anteriores siguen funcionando. La puntuación de Deriva se recalcula a partir de la distancia y el tiempo guardados. Si el navegador bloquea el almacenamiento o está lleno, el juego sigue funcionando y avisa una vez.
+Al leerlo se valida campo por campo (tipos, rangos y tamaño máximo); lo que falte o no sea válido toma su valor por defecto. Así, los guardados de versiones anteriores siguen funcionando. La puntuación de Deriva se recalcula a partir de la distancia y el tiempo guardados. Si el navegador bloquea el almacenamiento o está lleno, el juego sigue funcionando y avisa una vez. Qué se guarda y quién lo ve: [PRIVACY-INVENTORY.md](PRIVACY-INVENTORY.md).
+
+## Publicación y seguridad
+
+El juego es estático: todo corre en el navegador y no hay servidor, cuentas ni claves. Lo único que llega de fuera es el guardado, la URL y la semilla escrita, y todo pasa por una validación de lista blanca antes de llegar a la lógica. La interfaz se construye con nodos y `textContent`, nunca con HTML armado a partir de texto.
+
+El HTML publicado lleva una política de seguridad del contenido que solo permite cargar archivos del propio sitio. El flujo de despliegue (`.github/workflows/deploy.yml`) comprueba las dependencias, el lint, las pruebas, el build y la ausencia de secretos antes de publicar en GitHub Pages; si algo falla, no publica.
 
 ## Pruebas
 
@@ -96,7 +102,7 @@ Las pruebas (`tests/`, con Vitest en Node) cubren la lógica pura:
 - colocación de objetos, colisión, ruido y su propagación;
 - navegación, visión, comportamiento de la criatura y director;
 - escondites, zonas y puntuación de Deriva;
-- resolución dinámica, guardado y semillas.
+- resolución dinámica, guardado y semillas, incluidas entradas hostiles (texto con caracteres de control, HTML, guardados manipulados o enormes).
 
 Las pruebas usan semillas fijas, nunca aleatorias. El render y el audio real no se prueban.
 

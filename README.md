@@ -42,7 +42,7 @@ Cada partida usa una **semilla**: la misma semilla genera siempre el mismo mundo
 
 ## Privacidad
 
-El juego no recolecta datos personales, no usa cuentas, analítica ni cookies, y no se conecta a ningún servicio externo. Solo guarda en tu navegador, bajo la clave `zumbido:v1` de `localStorage`, los ajustes, el progreso, los mejores tiempos y la última semilla. Puedes borrarlos desde los datos del sitio en tu navegador.
+El juego no recolecta datos personales, no usa cuentas, analítica ni cookies, y no se conecta a ningún servicio externo. Solo guarda en tu navegador, bajo la clave `zumbido:v1` de `localStorage`, los ajustes, el progreso, los mejores tiempos y la última semilla. Puedes borrarlos desde los datos del sitio en tu navegador. El detalle está en [docs/PRIVACY-INVENTORY.md](docs/PRIVACY-INVENTORY.md).
 
 ## Desarrollo
 
