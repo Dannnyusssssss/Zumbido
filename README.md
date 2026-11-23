@@ -1,5 +1,7 @@
 # Zumbido
 
+![Zumbido: un pasillo de oficina con luces fluorescentes que se pierde en la penumbra](docs/cover.png)
+
 Terror en primera persona en un laberinto procedural de luces fluorescentes.
 
 Pasillos amarillentos que no terminan, alfombra húmeda, techos bajos y el zumbido eléctrico de las luces. No hay armas: solo puedes explorar, esconderte y escapar. Y algo te escucha.
@@ -69,4 +71,4 @@ Se publica en GitHub Pages con el workflow `.github/workflows/deploy.yml`, que e
 
 Todos los derechos reservados. Titular: Danny Sivinta. Ver [LICENSE](LICENSE).
 
-El juego usa [Three.js](https://threejs.org/) (licencia MIT). Las licencias de todas las dependencias están en [docs/LICENSES.md](docs/LICENSES.md). El arte se genera por código y el sonido se sintetiza en el navegador: no se usan imágenes, sonidos, fuentes ni modelos de terceros.
+El juego usa [Three.js](https://threejs.org/) (licencia MIT). Las licencias de todas las dependencias están en [docs/LICENSES.md](docs/LICENSES.md). El arte se genera por código y el sonido se sintetiza en el navegador: no se usan imágenes, sonidos, fuentes ni modelos de terceros. El título de la portada está dibujado con la fuente libre Barlow (SIL Open Font License; detalles en [docs/LICENSES.md](docs/LICENSES.md)).

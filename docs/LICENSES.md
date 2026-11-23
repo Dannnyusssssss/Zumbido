@@ -5,7 +5,12 @@
 Todos los derechos reservados. Titular: Danny Sivinta.
 
 El arte (geometría y texturas) se genera por código y el sonido se sintetiza en el navegador.
-No se usan imágenes, sonidos, fuentes ni modelos de terceros.
+No se usan imágenes, sonidos, fuentes ni modelos de terceros dentro del juego.
+
+La portada (`docs/cover.png`) es una captura del propio juego con el título y una frase
+añadidos. Ese texto está dibujado con la fuente [Barlow](https://github.com/jpt/barlow)
+(Copyright 2017 The Barlow Project Authors, licencia SIL Open Font License 1.1) y forma parte de
+la imagen: no se distribuye ningún archivo de fuente.
 
 ## Dependencias de ejecución (incluidas en `dist/`)
 
