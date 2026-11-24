@@ -25,9 +25,9 @@ la imagen: no se distribuye ningún archivo de fuente.
 | vite | 8.3.6 | MIT |
 | typescript | 6.0.3 | Apache-2.0 |
 | vitest | 5.1.0 | MIT |
-| eslint | 10.14.0 | MIT |
+| eslint | 10.15.0 | MIT |
 | @eslint/js | 10.0.1 | MIT |
-| typescript-eslint | 8.72.1 | MIT |
+| typescript-eslint | 8.73.0 | MIT |
 | eslint-config-prettier | 10.1.8 | MIT |
 | globals | 17.14.0 | MIT |
 | prettier | 3.9.10 | MIT |
